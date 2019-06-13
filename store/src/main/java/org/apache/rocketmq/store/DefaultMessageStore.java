@@ -1075,7 +1075,9 @@ public class DefaultMessageStore implements MessageStore {
                     for (int i = 0; i < bufferConsumeQueue.getSize(); ) {
                         i += ConsumeQueue.CQ_STORE_UNIT_SIZE;
                         long offsetPy = bufferConsumeQueue.getByteBuffer().getLong();
-                        return checkInDiskByCommitOffset(offsetPy, maxOffsetPy);
+                        if (checkInDiskByCommitOffset(offsetPy, maxOffsetPy)){
+                            return true;
+                        }
                     }
                 } finally {
 
