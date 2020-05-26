@@ -54,6 +54,9 @@ public class ClientManageProcessor implements NettyRequestProcessor {
     public RemotingCommand processRequest(ChannelHandlerContext ctx, RemotingCommand request)
         throws RemotingCommandException {
         switch (request.getCode()) {
+            //producer和consumer的心跳信息 心跳信息中 consumer携带了 订阅信息 producer携带了发送的信息
+            //这些信息在负载均衡的时候 使用
+            //@see org.apache.rocketmq.client.impl.factory.MQClientInstance.sendHeartbeatToAllBroker
             case RequestCode.HEART_BEAT:
                 return this.heartBeat(ctx, request);
             case RequestCode.UNREGISTER_CLIENT:
@@ -92,6 +95,7 @@ public class ClientManageProcessor implements NettyRequestProcessor {
                 if (data.isUnitMode()) {
                     topicSysFlag = TopicSysFlag.buildSysFlag(false, true);
                 }
+                //对于失败的消息 进行重试
                 String newTopic = MixAll.getRetryTopic(data.getGroupName());
                 this.brokerController.getTopicConfigManager().createTopicInSendMessageBackMethod(
                     newTopic,

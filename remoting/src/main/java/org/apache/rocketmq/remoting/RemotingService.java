@@ -17,7 +17,13 @@
 
 package org.apache.rocketmq.remoting;
 
+/**
+ * rocketmq-remoting 模块是 RocketMQ消息队列中负责网络通信的模块，而该类是最基本的接口
+ *
+ * @link https://github.com/Housum/rocketmq/blob/master/docs/cn/design.md
+ */
 public interface RemotingService {
+
     void start();
 
     void shutdown();

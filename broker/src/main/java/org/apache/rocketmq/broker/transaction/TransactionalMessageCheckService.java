@@ -22,6 +22,9 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ * 事务消息检查 对于producer状态不明,broker处理状态不明的事务消息,都会进行事务补偿
+ */
 public class TransactionalMessageCheckService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.TRANSACTION_LOGGER_NAME);
 
@@ -52,6 +55,7 @@ public class TransactionalMessageCheckService extends ServiceThread {
         int checkMax = brokerController.getBrokerConfig().getTransactionCheckMax();
         long begin = System.currentTimeMillis();
         log.info("Begin to check prepare message, begin time:{}", begin);
+        //进行事务的检查操作
         this.brokerController.getTransactionalMessageService().check(timeout, checkMax, this.brokerController.getTransactionalMessageCheckListener());
         log.info("End to check prepare message, consumed time:{}", System.currentTimeMillis() - begin);
     }

@@ -59,6 +59,7 @@ public class UtilAllTest {
         assertThat(properties.getProperty("demoWidth")).isEqualTo("456");
         assertThat(properties.getProperty("demoOK")).isEqualTo("true");
         assertThat(properties.getProperty("demoName")).isEqualTo("TestDemo");
+        assertThat(properties.getProperty("config")).isEqualTo(null);
     }
 
     @Test
@@ -134,6 +135,10 @@ public class UtilAllTest {
 
         public void setDemoName(String demoName) {
             this.demoName = demoName;
+        }
+
+        public String thisConfig(){
+            return "config";
         }
 
         @Override

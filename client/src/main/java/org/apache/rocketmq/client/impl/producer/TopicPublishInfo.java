@@ -23,9 +23,14 @@ import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.common.protocol.route.QueueData;
 import org.apache.rocketmq.common.protocol.route.TopicRouteData;
 
+/**
+ * Producer 储存路topic路由信息的地方
+ */
 public class TopicPublishInfo {
+
     private boolean orderTopic = false;
     private boolean haveTopicRouterInfo = false;
+    //MessageQueue的集合
     private List<MessageQueue> messageQueueList = new ArrayList<MessageQueue>();
     private volatile ThreadLocalIndex sendWhichQueue = new ThreadLocalIndex();
     private TopicRouteData topicRouteData;
@@ -76,6 +81,7 @@ public class TopicPublishInfo {
                 if (pos < 0)
                     pos = 0;
                 MessageQueue mq = this.messageQueueList.get(pos);
+                //尝试从其他的broker子集群中获取MessageQueue
                 if (!mq.getBrokerName().equals(lastBrokerName)) {
                     return mq;
                 }

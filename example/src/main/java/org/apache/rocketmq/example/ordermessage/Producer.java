@@ -18,6 +18,7 @@ package org.apache.rocketmq.example.ordermessage;
 
 import java.io.UnsupportedEncodingException;
 import java.util.List;
+
 import org.apache.rocketmq.client.exception.MQBrokerException;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
@@ -30,21 +31,26 @@ import org.apache.rocketmq.remoting.common.RemotingHelper;
 import org.apache.rocketmq.remoting.exception.RemotingException;
 
 public class Producer {
+
     public static void main(String[] args) throws UnsupportedEncodingException {
         try {
-            MQProducer producer = new DefaultMQProducer("please_rename_unique_group_name");
+            DefaultMQProducer producer = new DefaultMQProducer("please_rename_unique_group_name");
+            producer.setNamesrvAddr("localhost:9876");
             producer.start();
 
-            String[] tags = new String[] {"TagA", "TagB", "TagC", "TagD", "TagE"};
             for (int i = 0; i < 100; i++) {
                 int orderId = i % 10;
                 Message msg =
-                    new Message("TopicTestjjj", tags[i % tags.length], "KEY" + i,
-                        ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET));
+                        new Message("TopicTest", "TagA", "KEY" + i,
+                                ("Hello RocketMQ orderId = " + orderId + ",i = " + i).getBytes(RemotingHelper.DEFAULT_CHARSET));
+
                 SendResult sendResult = producer.send(msg, new MessageQueueSelector() {
                     @Override
                     public MessageQueue select(List<MessageQueue> mqs, Message msg, Object arg) {
+                        //Message Queue 用于存储消息的物理地址，每个Topic中的消息地址存储于多个 Message Queue 中
                         Integer id = (Integer) arg;
+                        //这里取余 将id相同的消息都投入到同一个Message Queue,然后在消费的时候选择MessageListenerOrderly
+                        //那么将就是有序的
                         int index = id % mqs.size();
                         return mqs.get(index);
                     }

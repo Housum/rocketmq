@@ -22,13 +22,20 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 会话域 MQ中的消息
+ */
 public class Message implements Serializable {
     private static final long serialVersionUID = 8445773977080406428L;
 
+    //topic
     private String topic;
     private int flag;
+    //消息关联的属性
     private Map<String, String> properties;
+    //消息体
     private byte[] body;
+    //事务ID 如果是事务消息的话 那么存在
     private String transactionId;
 
     public Message() {
@@ -36,6 +43,10 @@ public class Message implements Serializable {
 
     public Message(String topic, byte[] body) {
         this(topic, "", "", 0, body, true);
+    }
+
+    public Message(String topic, String tags, byte[] body) {
+        this(topic, tags, "", 0, body, true);
     }
 
     public Message(String topic, String tags, String keys, int flag, byte[] body, boolean waitStoreMsgOK) {
@@ -52,13 +63,10 @@ public class Message implements Serializable {
         this.setWaitStoreMsgOK(waitStoreMsgOK);
     }
 
-    public Message(String topic, String tags, byte[] body) {
-        this(topic, tags, "", 0, body, true);
-    }
-
     public Message(String topic, String tags, String keys, byte[] body) {
         this(topic, tags, keys, 0, body, true);
     }
+
 
     public void setKeys(String keys) {
         this.putProperty(MessageConst.PROPERTY_KEYS, keys);

@@ -194,6 +194,7 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
         final MessageQueue messageQueue,
         final boolean dispathToConsume) {
         if (dispathToConsume) {
+            //如果有序的话 那么只能将任务一个一个放入到线程池中 这样就能够保证有序
             ConsumeRequest consumeRequest = new ConsumeRequest(processQueue, messageQueue);
             this.consumeExecutor.submit(consumeRequest);
         }
@@ -405,9 +406,9 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
             }
 
             final Object objLock = messageQueueLock.fetchLockObject(this.messageQueue);
+            //这里的思考 对于有序队列来说 如果前面的那个消息消费失败了 那么会怎样呢？
             synchronized (objLock) {
-                if (MessageModel.BROADCASTING.equals(ConsumeMessageOrderlyService.this.defaultMQPushConsumerImpl.messageModel())
-                    || (this.processQueue.isLocked() && !this.processQueue.isLockExpired())) {
+                if (MessageModel.BROADCASTING.equals(ConsumeMessageOrderlyService.this.defaultMQPushConsumerImpl.messageModel()) || (this.processQueue.isLocked() && !this.processQueue.isLockExpired())) {
                     final long beginTime = System.currentTimeMillis();
                     for (boolean continueConsume = true; continueConsume; ) {
                         if (this.processQueue.isDropped()) {

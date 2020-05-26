@@ -77,22 +77,31 @@ public abstract class NettyRemotingAbstract {
     /**
      * This container holds all processors per request code, aka, for each incoming request, we may look up the
      * responding processor in this map to handle the request.
+     *
+     * 对于每种请求码 需要定义处理器进行处理,ExecutorService为执行操作线程池
+     *
      */
     protected final HashMap<Integer/* request code */, Pair<NettyRequestProcessor, ExecutorService>> processorTable =
         new HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>>(64);
 
     /**
      * Executor to feed netty events to user defined {@link ChannelEventListener}.
+     * netty事件执行器类型 根据类型不同执行ChannelEventListener方法
+     * @see org.apache.rocketmq.remoting.netty.NettyEvent
+     *
      */
     protected final NettyEventExecutor nettyEventExecutor = new NettyEventExecutor();
 
     /**
      * The default request processor to use in case there is no exact match in {@link #processorTable} per request code.
+     * 默认的请求执行器 对于没有定义请求码的 使用默认的进行处理
+     *
      */
     protected Pair<NettyRequestProcessor, ExecutorService> defaultRequestProcessor;
 
     /**
      * SSL context via which to create {@link SslHandler}.
+     * SSL
      */
     protected volatile SslContext sslContext;
 
@@ -128,6 +137,8 @@ public abstract class NettyRemotingAbstract {
     /**
      * Put a netty event to the executor.
      *
+     * 添加netty事件
+     *
      * @param event Netty event instance.
      */
     public void putNettyEvent(final NettyEvent event) {
@@ -136,6 +147,8 @@ public abstract class NettyRemotingAbstract {
 
     /**
      * Entry of incoming command processing.
+     *
+     * 处理收到的消息 有可能是收到请求也有可能是接受到返回
      *
      * <p>
      * <strong>Note:</strong>
@@ -147,11 +160,11 @@ public abstract class NettyRemotingAbstract {
      * </p>
      *
      * @param ctx Channel handler context.
-     * @param msg incoming remoting command.
+     * @param cmd incoming remoting command.
      * @throws Exception if there were any error while processing the incoming command.
      */
-    public void processMessageReceived(ChannelHandlerContext ctx, RemotingCommand msg) throws Exception {
-        final RemotingCommand cmd = msg;
+    public void processMessageReceived(ChannelHandlerContext ctx, RemotingCommand cmd) throws Exception {
+//        final RemotingCommand cmd = msg;
         if (cmd != null) {
             switch (cmd.getType()) {
                 case REQUEST_COMMAND:
@@ -184,6 +197,9 @@ public abstract class NettyRemotingAbstract {
 
 
     /**
+     *
+     * 处理进来的请求
+     *
      * Process incoming request command issued by remote peer.
      *
      * @param ctx channel handler context.
@@ -200,9 +216,11 @@ public abstract class NettyRemotingAbstract {
                 public void run() {
                     try {
                         doBeforeRpcHooks(RemotingHelper.parseChannelRemoteAddr(ctx.channel()), cmd);
+                        //执行请求
                         final RemotingCommand response = pair.getObject1().processRequest(ctx, cmd);
                         doAfterRpcHooks(RemotingHelper.parseChannelRemoteAddr(ctx.channel()), cmd, response);
 
+                        //如果不是单向的请求 需要返回结果(如果有的话 如果返回null 则不会进行返回 有可能是执行期自己返回了)
                         if (!cmd.isOnewayRPC()) {
                             if (response != null) {
                                 response.setOpaque(opaque);
@@ -232,6 +250,7 @@ public abstract class NettyRemotingAbstract {
                 }
             };
 
+            //如果执行器觉得需要拒绝请求的话（流控）
             if (pair.getObject1().rejectRequest()) {
                 final RemotingCommand response = RemotingCommand.createResponseCommand(RemotingSysResponseCode.SYSTEM_BUSY,
                     "[REJECTREQUEST]system busy, start flow control for a while");
@@ -241,6 +260,7 @@ public abstract class NettyRemotingAbstract {
             }
 
             try {
+                //将执行操作进行提交
                 final RequestTask requestTask = new RequestTask(run, ctx.channel(), cmd);
                 pair.getObject2().submit(requestTask);
             } catch (RejectedExecutionException e) {
@@ -366,6 +386,8 @@ public abstract class NettyRemotingAbstract {
     public abstract ExecutorService getCallbackExecutor();
 
     /**
+     * 在发送请求的时候 将会把请求放入到其中 在发送成功消息之后将会移除
+     * 这里需要做的就是在超时的时候移除这些超时的请求
      * <p>
      * This method is periodically invoked to scan and expire deprecated request.
      * </p>
@@ -380,6 +402,7 @@ public abstract class NettyRemotingAbstract {
             if ((rep.getBeginTimestamp() + rep.getTimeoutMillis() + 1000) <= System.currentTimeMillis()) {
                 rep.release();
                 it.remove();
+
                 rfList.add(rep);
                 log.warn("remove timeout request, " + rep);
             }
@@ -404,8 +427,12 @@ public abstract class NettyRemotingAbstract {
             this.responseTable.put(opaque, responseFuture);
             final SocketAddress addr = channel.remoteAddress();
             channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
+
                 @Override
                 public void operationComplete(ChannelFuture f) throws Exception {
+
+                    //设置是消息是否发送成功
+
                     if (f.isSuccess()) {
                         responseFuture.setSendRequestOK(true);
                         return;
@@ -574,6 +601,7 @@ public abstract class NettyRemotingAbstract {
 
             while (!this.isStopped()) {
                 try {
+                    //获取netty事件
                     NettyEvent event = this.eventQueue.poll(3000, TimeUnit.MILLISECONDS);
                     if (event != null && listener != null) {
                         switch (event.getType()) {

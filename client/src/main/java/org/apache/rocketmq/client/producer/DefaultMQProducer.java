@@ -43,6 +43,8 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.apache.rocketmq.remoting.netty.NettyRemotingClient;
 
 /**
+ * 发送消息的门面
+ *
  * This class is the entry point for applications intending to send messages.
  * </p>
  *
@@ -87,16 +89,19 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Number of queues to create per default topic.
+     * 默认创建的MessageQueue的个数
      */
     private volatile int defaultTopicQueueNums = 4;
 
     /**
      * Timeout for sending messages.
+     * 默认发送消息的超时时间
      */
     private int sendMsgTimeout = 3000;
 
     /**
      * Compress message body threshold, namely, message body larger than 4k will be compressed on default.
+     * 压缩消息的阀值
      */
     private int compressMsgBodyOverHowmuch = 1024 * 4;
 
@@ -105,6 +110,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * </p>
      *
      * This may potentially cause message duplication which is up to application developers to resolve.
+     * 发送消息的重试次数
      */
     private int retryTimesWhenSendFailed = 2;
 
@@ -113,6 +119,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * </p>
      *
      * This may potentially cause message duplication which is up to application developers to resolve.
+     * 发送消息的重试次数 - 异步
      */
     private int retryTimesWhenSendAsyncFailed = 2;
 
@@ -123,6 +130,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Maximum allowed message size in bytes.
+     * 消息允许的最大值
      */
     private int maxMessageSize = 1024 * 1024 * 4; // 4M
 
@@ -146,6 +154,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      */
     public DefaultMQProducer(final String producerGroup, RPCHook rpcHook) {
         this.producerGroup = producerGroup;
+        //创建实现类
         defaultMQProducerImpl = new DefaultMQProducerImpl(this, rpcHook);
     }
 
@@ -161,6 +170,8 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
         this.producerGroup = producerGroup;
         defaultMQProducerImpl = new DefaultMQProducerImpl(this, rpcHook);
         //if client open the message trace feature
+        //消息轨迹
+        //https://github.com/apache/rocketmq/blob/master/docs/cn/msg_trace/user_guide.md
         if (enableMsgTrace) {
             try {
                 AsyncTraceDispatcher dispatcher = new AsyncTraceDispatcher(customizedTraceTopic, rpcHook);

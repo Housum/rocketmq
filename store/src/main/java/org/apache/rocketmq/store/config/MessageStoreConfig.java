@@ -17,6 +17,7 @@
 package org.apache.rocketmq.store.config;
 
 import java.io.File;
+
 import org.apache.rocketmq.common.annotation.ImportantField;
 import org.apache.rocketmq.store.ConsumeQueue;
 
@@ -28,8 +29,9 @@ public class MessageStoreConfig {
     //The directory in which the commitlog is kept
     @ImportantField
     private String storePathCommitLog = System.getProperty("user.home") + File.separator + "store"
-        + File.separator + "commitlog";
+            + File.separator + "commitlog";
 
+    //commitLog的文件的大小 默认是1G
     // CommitLog file size,default is 1G
     private int mapedFileSizeCommitLog = 1024 * 1024 * 1024;
     // ConsumeQueue file size,default is 30W
@@ -121,6 +123,7 @@ public class MessageStoreConfig {
     @ImportantField
     private String haMasterAddress = null;
     private int haSlaveFallbehindMax = 1024 * 1024 * 256;
+    //broker的状态 默认是master
     @ImportantField
     private BrokerRole brokerRole = BrokerRole.ASYNC_MASTER;
     @ImportantField
@@ -143,7 +146,9 @@ public class MessageStoreConfig {
     private int transientStorePoolSize = 5;
     private boolean fastFailIfNoBufferInStorePool = false;
 
+    //是否打开DLedger
     private boolean enableDLegerCommitLog = false;
+    //DLedger 的配置 group 集群配置 id
     private String dLegerGroup;
     private String dLegerPeers;
     private String dLegerSelfId;
@@ -616,7 +621,7 @@ public class MessageStoreConfig {
      */
     public boolean isTransientStorePoolEnable() {
         return transientStorePoolEnable && FlushDiskType.ASYNC_FLUSH == getFlushDiskType()
-            && BrokerRole.SLAVE != getBrokerRole();
+                && BrokerRole.SLAVE != getBrokerRole();
     }
 
     public void setTransientStorePoolEnable(final boolean transientStorePoolEnable) {

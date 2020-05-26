@@ -69,6 +69,7 @@ public class NamesrvStartup {
     }
 
     public static NamesrvController createNamesrvController(String[] args) throws IOException, JoranException {
+        //设置nameservice版本 rocketmq.remoting.version
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
         //PackageConflictDetect.detectFastjson();
 
@@ -81,6 +82,7 @@ public class NamesrvStartup {
 
         final NamesrvConfig namesrvConfig = new NamesrvConfig();
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
+        //端口默认为9876
         nettyServerConfig.setListenPort(9876);
         if (commandLine.hasOption('c')) {
             String file = commandLine.getOptionValue('c');
@@ -88,6 +90,7 @@ public class NamesrvStartup {
                 InputStream in = new BufferedInputStream(new FileInputStream(file));
                 properties = new Properties();
                 properties.load(in);
+                //将属性注入到属性中
                 MixAll.properties2Object(properties, namesrvConfig);
                 MixAll.properties2Object(properties, nettyServerConfig);
 

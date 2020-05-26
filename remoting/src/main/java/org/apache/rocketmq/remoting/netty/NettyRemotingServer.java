@@ -62,6 +62,9 @@ import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+/**
+ * netty实现的服务端
+ */
 public class NettyRemotingServer extends NettyRemotingAbstract implements RemotingServer {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
     private final ServerBootstrap serverBootstrap;
@@ -98,6 +101,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             publicThreadNums = 4;
         }
 
+        //以下都是netty的线程池进行设置
         this.publicExecutor = Executors.newFixedThreadPool(publicThreadNums, new ThreadFactory() {
             private AtomicInteger threadIndex = new AtomicInteger(0);
 
@@ -186,6 +190,17 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 }
             });
 
+        /*
+         * https://github.com/Housum/rocketmq/blob/master/docs/cn/design.md
+         *
+         * 上面的框图中可以大致了解RocketMQ中NettyRemotingServer的Reactor 多线程模型。一个 Reactor 主线程（eventLoopGroupBoss，即为上面的1）
+         * 负责监听 TCP网络连接请求，建立好连接，创建SocketChannel，并注册到selector上。RocketMQ的源码中会自动根据OS的类型选择NIO和Epoll，也可以通过参数配置）,
+         * 然后监听真正的网络数据。拿到网络数据后，再丢给Worker线程池（eventLoopGroupSelector，即为上面的“N”，源码中默认设置为3），
+         * 在真正执行业务逻辑之前需要进行SSL验证、编解码、空闲检查、网络连接管理，这些工作交给defaultEventExecutorGroup（即为上面的“M1”，源码中默认设置为8）去做。
+         * 而处理业务操作放在业务线程池中执行，根据 RomotingCommand 的业务请求码code去processorTable这个本地缓存变量中找到对应的 processor，然后封装成task任务后，
+         * 提交给对应的业务processor处理线程池来执行（sendMessageExecutor，以发送消息为例，即为上面的 “M2”）。从入口到业务逻辑的几个步骤中线程池一直再增加，
+         * 这跟每一步逻辑复杂性相关，越复杂，需要的并发通道越宽
+         */
         ServerBootstrap childHandler =
             this.serverBootstrap.group(this.eventLoopGroupBoss, this.eventLoopGroupSelector)
                 .channel(useEpoll() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
@@ -200,13 +215,17 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                     @Override
                     public void initChannel(SocketChannel ch) throws Exception {
                         ch.pipeline()
+                             //HandshakeHandler 使用的是defaultEventExecutorGroup进行处理
                             .addLast(defaultEventExecutorGroup, HANDSHAKE_HANDLER_NAME,
                                 new HandshakeHandler(TlsSystemConfig.tlsMode))
                             .addLast(defaultEventExecutorGroup,
                                 new NettyEncoder(),
                                 new NettyDecoder(),
+                                //闲置连接 处理
                                 new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),
+                                //监听连接类事件
                                 new NettyConnectManageHandler(),
+                                //监听读事件
                                 new NettyServerHandler()
                             );
                     }
@@ -224,10 +243,13 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             throw new RuntimeException("this.serverBootstrap.bind().sync() InterruptedException", e1);
         }
 
+
+        //netty 事件监听器打开
         if (this.channelEventListener != null) {
             this.nettyEventExecutor.start();
         }
 
+        //判断请求是否超时
         this.timer.scheduleAtFixedRate(new TimerTask() {
 
             @Override
@@ -443,6 +465,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+            //@see io.netty.handler.timeout.IdleStateHandler
             if (evt instanceof IdleStateEvent) {
                 IdleStateEvent event = (IdleStateEvent) evt;
                 if (event.state().equals(IdleState.ALL_IDLE)) {
@@ -450,8 +473,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                     log.warn("NETTY SERVER PIPELINE: IDLE exception [{}]", remoteAddress);
                     RemotingUtil.closeChannel(ctx.channel());
                     if (NettyRemotingServer.this.channelEventListener != null) {
-                        NettyRemotingServer.this
-                            .putNettyEvent(new NettyEvent(NettyEventType.IDLE, remoteAddress, ctx.channel()));
+                        NettyRemotingServer.this.putNettyEvent(new NettyEvent(NettyEventType.IDLE, remoteAddress, ctx.channel()));
                     }
                 }
             }

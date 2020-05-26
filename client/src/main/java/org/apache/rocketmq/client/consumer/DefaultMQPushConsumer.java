@@ -88,6 +88,8 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      * </p>
      *
      * This field defaults to clustering.
+     * 默认是集群消费模式,对于同一个topic的消息,集群中的消费者将会瓜分消息
+     * 但是广播模式下的话,集群中的每个消费者都将全量消费消息
      */
     private MessageModel messageModel = MessageModel.CLUSTERING;
 
@@ -121,6 +123,11 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      * messages born prior to {@link #consumeTimestamp} will be ignored
      * </li>
      * </ul>
+     *
+     * CONSUME_FROM_LAST_OFFSET：第一次启动从队列最后位置消费，后续再启动接着上次消费的进度开始消费
+     * CONSUME_FROM_FIRST_OFFSET：第一次启动从队列初始位置消费，后续再启动接着上次消费的进度开始消费
+     * CONSUME_FROM_TIMESTAMP：第一次启动从指定时间点位置消费，后续再启动接着上次消费的进度开始消费
+     *
      */
     private ConsumeFromWhere consumeFromWhere = ConsumeFromWhere.CONSUME_FROM_LAST_OFFSET;
 
@@ -139,36 +146,43 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
 
     /**
      * Subscription relationship
+     * 订阅的信息
      */
     private Map<String /* topic */, String /* sub expression */> subscription = new HashMap<String, String>();
 
     /**
      * Message listener
+     * 消息的监听
      */
     private MessageListener messageListener;
 
     /**
      * Offset Storage
+     * 存储consumer消费记录
      */
     private OffsetStore offsetStore;
 
     /**
      * Minimum consumer thread number
+     * 消费的最小线程
      */
     private int consumeThreadMin = 20;
 
     /**
      * Max consumer thread number
+     * 消费的最大线程
      */
     private int consumeThreadMax = 64;
 
     /**
      * Threshold for dynamic adjustment of the number of thread pool
+     *
      */
     private long adjustThreadPoolNumsThreshold = 100000;
 
     /**
      * Concurrently max span offset.it has no effect on sequential consumption
+     * 并发消费的时候 分段的距离
      */
     private int consumeConcurrentlyMaxSpan = 2000;
 
@@ -220,7 +234,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
     private int consumeMessageBatchMaxSize = 1;
 
     /**
-     * Batch pull size
+     * Batch pull size 每次获取消息的个数
      */
     private int pullBatchSize = 32;
 

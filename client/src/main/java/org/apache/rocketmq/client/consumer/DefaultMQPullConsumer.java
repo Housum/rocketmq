@@ -35,6 +35,12 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 
 /**
  * Default pulling consumer
+ *
+ * 拉模式的consumer,对于push和pull模式来说都是相同的,push模式其实底层也是使用了
+ * pull的能力. 其中有一类方法需要注意一下，可能实现上说有点不一样就是pullBlockIfNotFound
+ * ,如果没有消息就一直堵塞直到有消息,这个不是客户端轮询的,在broker端也会进行通知
+ * @see org.apache.rocketmq.store.MessageArrivingListener
+ *
  */
 public class DefaultMQPullConsumer extends ClientConfig implements MQPullConsumer {
     protected final transient DefaultMQPullConsumerImpl defaultMQPullConsumerImpl;

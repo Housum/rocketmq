@@ -32,15 +32,17 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.config.BrokerRole;
 
 /**
+ * 预先分配MappedFile 在分配的时候将当前分配的文件以及下一个需要分配的文件都给
+ * 提交请求
+ *
  * Create MappedFile in advance
  */
 public class AllocateMappedFileService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
-    private static int waitTimeOut = 1000 * 5;
-    private ConcurrentMap<String, AllocateRequest> requestTable =
-        new ConcurrentHashMap<String, AllocateRequest>();
-    private PriorityBlockingQueue<AllocateRequest> requestQueue =
-        new PriorityBlockingQueue<AllocateRequest>();
+    private static final int waitTimeOut = 1000 * 5;
+    private ConcurrentMap<String, AllocateRequest> requestTable = new ConcurrentHashMap<String, AllocateRequest>();
+    //文件分配请求
+    private PriorityBlockingQueue<AllocateRequest> requestQueue = new PriorityBlockingQueue<AllocateRequest>();
     private volatile boolean hasException = false;
     private DefaultMessageStore messageStore;
 
@@ -67,6 +69,7 @@ public class AllocateMappedFileService extends ServiceThread {
                 this.requestTable.remove(nextFilePath);
                 return null;
             }
+            //将创建文件的请求放入到其中 后台线程会去创建
             boolean offerOK = this.requestQueue.offer(nextReq);
             if (!offerOK) {
                 log.warn("never expected here, add a request to preallocate queue failed");
@@ -82,6 +85,7 @@ public class AllocateMappedFileService extends ServiceThread {
                     "RequestQueueSize : {}, StorePoolSize: {}", this.requestQueue.size(), this.messageStore.getTransientStorePool().remainBufferNumbs());
                 this.requestTable.remove(nextNextFilePath);
             } else {
+                //提前的将下一个文件给创建出来
                 boolean offerOK = this.requestQueue.offer(nextNextReq);
                 if (!offerOK) {
                     log.warn("never expected here, add a request to preallocate queue failed");

@@ -54,6 +54,9 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.apache.rocketmq.remoting.netty.ResponseFuture;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+/**
+ * MQ的一些管理 比如查询topic有哪些MessageQueue,创建topic,查询指定的MessageQueue的最大或者最小的offset,查询具体的消息
+ */
 public class MQAdminImpl {
 
     private final InternalLogger log = ClientLogger.getLog();
@@ -72,6 +75,12 @@ public class MQAdminImpl {
         this.timeoutMillis = timeoutMillis;
     }
 
+    /**
+     * 创建topic
+     * @param key TODO？
+     * @param newTopic 新的topic
+     * @param queueNum 读写的数目
+     */
     public void createTopic(String key, String newTopic, int queueNum) throws MQClientException {
         createTopic(key, newTopic, queueNum, 0);
     }
@@ -130,6 +139,9 @@ public class MQAdminImpl {
         }
     }
 
+    /**
+     * 获取topic的MessageQueue
+     */
     public List<MessageQueue> fetchPublishMessageQueues(String topic) throws MQClientException {
         try {
             TopicRouteData topicRouteData = this.mQClientFactory.getMQClientAPIImpl().getTopicRouteInfoFromNameServer(topic, timeoutMillis);
@@ -146,6 +158,9 @@ public class MQAdminImpl {
         throw new MQClientException("Unknow why, Can not find Message Queue for this topic, " + topic, null);
     }
 
+    /**
+     * 获取topic订阅的MessageQueue
+     */
     public Set<MessageQueue> fetchSubscribeMessageQueues(String topic) throws MQClientException {
         try {
             TopicRouteData topicRouteData = this.mQClientFactory.getMQClientAPIImpl().getTopicRouteInfoFromNameServer(topic, timeoutMillis);
@@ -166,6 +181,9 @@ public class MQAdminImpl {
         throw new MQClientException("Unknow why, Can not find Message Queue for this topic, " + topic, null);
     }
 
+    /**
+     * 根据timestamp获取ConsumerQueue的offset
+     */
     public long searchOffset(MessageQueue mq, long timestamp) throws MQClientException {
         String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
         if (null == brokerAddr) {
@@ -240,8 +258,7 @@ public class MQAdminImpl {
         throw new MQClientException("The broker[" + mq.getBrokerName() + "] not exist", null);
     }
 
-    public MessageExt viewMessage(
-        String msgId) throws RemotingException, MQBrokerException, InterruptedException, MQClientException {
+    public MessageExt viewMessage(String msgId) throws RemotingException, MQBrokerException, InterruptedException, MQClientException {
 
         MessageId messageId = null;
         try {
@@ -253,17 +270,14 @@ public class MQAdminImpl {
             messageId.getOffset(), timeoutMillis);
     }
 
-    public QueryResult queryMessage(String topic, String key, int maxNum, long begin,
-        long end) throws MQClientException,
+    public QueryResult queryMessage(String topic, String key, int maxNum, long begin, long end) throws MQClientException,
         InterruptedException {
         return queryMessage(topic, key, maxNum, begin, end, false);
     }
 
-    public MessageExt queryMessageByUniqKey(String topic,
-        String uniqKey) throws InterruptedException, MQClientException {
+    public MessageExt queryMessageByUniqKey(String topic, String uniqKey) throws InterruptedException, MQClientException {
 
-        QueryResult qr = this.queryMessage(topic, uniqKey, 32,
-            MessageClientIDSetter.getNearlyTimeFromID(uniqKey).getTime() - 1000, Long.MAX_VALUE, true);
+        QueryResult qr = this.queryMessage(topic, uniqKey, 32, MessageClientIDSetter.getNearlyTimeFromID(uniqKey).getTime() - 1000, Long.MAX_VALUE, true);
         if (qr != null && qr.getMessageList() != null && qr.getMessageList().size() > 0) {
             return qr.getMessageList().get(0);
         } else {
@@ -367,17 +381,12 @@ public class MQAdminImpl {
                     for (MessageExt msgExt : qr.getMessageList()) {
                         if (isUniqKey) {
                             if (msgExt.getMsgId().equals(key)) {
-
                                 if (messageList.size() > 0) {
-
                                     if (messageList.get(0).getStoreTimestamp() > msgExt.getStoreTimestamp()) {
-
                                         messageList.clear();
                                         messageList.add(msgExt);
                                     }
-
                                 } else {
-
                                     messageList.add(msgExt);
                                 }
                             } else {

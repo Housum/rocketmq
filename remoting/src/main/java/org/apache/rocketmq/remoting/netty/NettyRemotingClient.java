@@ -81,6 +81,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
 
     private final Timer timer = new Timer("ClientHouseKeepingService", true);
 
+    //nameserver 的地址集合
     private final AtomicReference<List<String>> namesrvAddrList = new AtomicReference<List<String>>();
     private final AtomicReference<String> namesrvAddrChoosed = new AtomicReference<String>();
     private final AtomicInteger namesrvIndex = new AtomicInteger(initValueIndex());
@@ -99,8 +100,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         this(nettyClientConfig, null);
     }
 
-    public NettyRemotingClient(final NettyClientConfig nettyClientConfig,
-        final ChannelEventListener channelEventListener) {
+    public NettyRemotingClient(final NettyClientConfig nettyClientConfig, final ChannelEventListener channelEventListener) {
         super(nettyClientConfig.getClientOnewaySemaphoreValue(), nettyClientConfig.getClientAsyncSemaphoreValue());
         this.nettyClientConfig = nettyClientConfig;
         this.channelEventListener = channelEventListener;

@@ -28,6 +28,11 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
+ *
+ *
+ * consume queue 扩展,保存一些不是很重要但是需要的东西
+ * 保存在文件中，文件比较小
+ *
  * Extend of consume queue, to store something not important,
  * such as message store time, filter bit map and etc.
  * <p/>

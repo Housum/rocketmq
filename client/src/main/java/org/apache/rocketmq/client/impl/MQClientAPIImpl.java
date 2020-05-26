@@ -855,11 +855,7 @@ public class MQClientAPIImpl {
         this.remotingClient.invokeOneway(MixAll.brokerVIPChannel(this.clientConfig.isVipChannelEnabled(), addr), request, timeoutMillis);
     }
 
-    public int sendHearbeat(
-        final String addr,
-        final HeartbeatData heartbeatData,
-        final long timeoutMillis
-    ) throws RemotingException, MQBrokerException, InterruptedException {
+    public int sendHearbeat(final String addr, final HeartbeatData heartbeatData, final long timeoutMillis) throws RemotingException, MQBrokerException, InterruptedException {
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.HEART_BEAT, null);
         request.setLanguage(clientConfig.getLanguage());
         request.setBody(heartbeatData.encode());
@@ -1192,7 +1188,6 @@ public class MQClientAPIImpl {
 
     public TopicRouteData getDefaultTopicRouteInfoFromNameServer(final String topic, final long timeoutMillis)
         throws RemotingException, MQClientException, InterruptedException {
-
         return getTopicRouteInfoFromNameServer(topic, timeoutMillis, false);
     }
 
@@ -1207,6 +1202,7 @@ public class MQClientAPIImpl {
         GetRouteInfoRequestHeader requestHeader = new GetRouteInfoRequestHeader();
         requestHeader.setTopic(topic);
 
+        //获取topic信息 org.apache.rocketmq.namesrv.processor.DefaultRequestProcessor.getRouteInfoByTopic
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.GET_ROUTEINTO_BY_TOPIC, requestHeader);
 
         RemotingCommand response = this.remotingClient.invokeSync(null, request, timeoutMillis);

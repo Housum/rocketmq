@@ -44,6 +44,8 @@ public class ClientConfig {
      */
     private int persistConsumerOffsetInterval = 1000 * 5;
     private boolean unitMode = false;
+    //MQClientInstance 组 默认情况下 同一个VM中其中的producer,consumer,admin共享同一个MQClientInstance
+    //但是可以通过该参数设置不同的分组
     private String unitName;
     private boolean vipChannelEnabled = Boolean.parseBoolean(System.getProperty(SEND_MESSAGE_WITH_VIP_CHANNEL_PROPERTY, "true"));
 

@@ -48,6 +48,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.rocketmq.remoting.netty.TlsSystemConfig.TLS_ENABLE;
 
+/**
+ * broker 启动类
+ */
 public class BrokerStartup {
     public static Properties properties = null;
     public static CommandLine commandLine = null;
@@ -88,6 +91,7 @@ public class BrokerStartup {
     }
 
     public static BrokerController createBrokerController(String[] args) {
+        //版本
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
 
         if (null == System.getProperty(NettySystemConfig.COM_ROCKETMQ_REMOTING_SOCKET_SNDBUF_SIZE)) {
@@ -101,18 +105,22 @@ public class BrokerStartup {
         try {
             //PackageConflictDetect.detectFastjson();
             Options options = ServerUtil.buildCommandlineOptions(new Options());
+            //解析参数
             commandLine = ServerUtil.parseCmdLine("mqbroker", args, buildCommandlineOptions(options),
                 new PosixParser());
             if (null == commandLine) {
                 System.exit(-1);
             }
 
+
+            //从命令参数中解析出参数
             final BrokerConfig brokerConfig = new BrokerConfig();
             final NettyServerConfig nettyServerConfig = new NettyServerConfig();
             final NettyClientConfig nettyClientConfig = new NettyClientConfig();
 
             nettyClientConfig.setUseTLS(Boolean.parseBoolean(System.getProperty(TLS_ENABLE,
                 String.valueOf(TlsSystemConfig.tlsMode == TlsMode.ENFORCING))));
+            //默认broker监听的端口
             nettyServerConfig.setListenPort(10911);
             final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
 
@@ -121,6 +129,7 @@ public class BrokerStartup {
                 messageStoreConfig.setAccessMessageInMemoryMaxRatio(ratio);
             }
 
+            //指定了配置文件
             if (commandLine.hasOption('c')) {
                 String file = commandLine.getOptionValue('c');
                 if (file != null) {
@@ -162,7 +171,11 @@ public class BrokerStartup {
                 }
             }
 
+            //Broker分为Master与Slave，一个Master可以对应多个Slave，但是一个Slave只能对应一个Master，
+            //Master与Slave 的对应关系通过指定相同的BrokerName，不同的BrokerId 来定义，BrokerId为0表示Master，非0表示Slave
+
             switch (messageStoreConfig.getBrokerRole()) {
+                //异步master,同步master
                 case ASYNC_MASTER:
                 case SYNC_MASTER:
                     brokerConfig.setBrokerId(MixAll.MASTER_ID);
@@ -177,7 +190,7 @@ public class BrokerStartup {
                 default:
                     break;
             }
-
+            //HA地址 原有的地址+1
             messageStoreConfig.setHaListenPort(nettyServerConfig.getListenPort() + 1);
             LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
             JoranConfigurator configurator = new JoranConfigurator();
@@ -201,6 +214,7 @@ public class BrokerStartup {
                 System.exit(0);
             }
 
+            //将配置进行打印
             log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
             MixAll.printObjectProperties(log, brokerConfig);
             MixAll.printObjectProperties(log, nettyServerConfig);

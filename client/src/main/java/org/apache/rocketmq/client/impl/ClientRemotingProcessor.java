@@ -47,6 +47,9 @@ import org.apache.rocketmq.remoting.netty.NettyRequestProcessor;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
 
+/**
+ * broker调用client请求处理
+ */
 public class ClientRemotingProcessor implements NettyRequestProcessor {
     private final InternalLogger log = ClientLogger.getLog();
     private final MQClientInstance mqClientFactory;
@@ -60,8 +63,10 @@ public class ClientRemotingProcessor implements NettyRequestProcessor {
         RemotingCommand request) throws RemotingCommandException {
         switch (request.getCode()) {
             case RequestCode.CHECK_TRANSACTION_STATE:
+                //检查producer事务状态
                 return this.checkTransactionState(ctx, request);
             case RequestCode.NOTIFY_CONSUMER_IDS_CHANGED:
+                //通过consumer的id修改了
                 return this.notifyConsumerIdsChanged(ctx, request);
             case RequestCode.RESET_CONSUMER_CLIENT_OFFSET:
                 return this.resetOffset(ctx, request);
@@ -122,6 +127,7 @@ public class ClientRemotingProcessor implements NettyRequestProcessor {
             log.info("receive broker's notification[{}], the consumer group: {} changed, rebalance immediately",
                 RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
                 requestHeader.getConsumerGroup());
+            //马上触发consumer进行负载均衡操作 并且开始拉去broker的消息
             this.mqClientFactory.rebalanceImmediately();
         } catch (Exception e) {
             log.error("notifyConsumerIdsChanged exception", RemotingHelper.exceptionSimpleDesc(e));
@@ -193,8 +199,7 @@ public class ClientRemotingProcessor implements NettyRequestProcessor {
 
         final MessageExt msg = MessageDecoder.decode(ByteBuffer.wrap(request.getBody()));
 
-        ConsumeMessageDirectlyResult result =
-            this.mqClientFactory.consumeMessageDirectly(msg, requestHeader.getConsumerGroup(), requestHeader.getBrokerName());
+        ConsumeMessageDirectlyResult result = this.mqClientFactory.consumeMessageDirectly(msg, requestHeader.getConsumerGroup(), requestHeader.getBrokerName());
 
         if (null != result) {
             response.setCode(ResponseCode.SUCCESS);

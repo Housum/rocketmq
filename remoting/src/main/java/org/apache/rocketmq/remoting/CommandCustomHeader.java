@@ -18,6 +18,11 @@ package org.apache.rocketmq.remoting;
 
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 
+/**
+ * 自定义头信息,在通信过程中自定义的头信息都需要继承该接口
+ * @see org.apache.rocketmq.remoting.protocol.RemotingCommand
+ */
 public interface CommandCustomHeader {
+
     void checkFields() throws RemotingCommandException;
 }

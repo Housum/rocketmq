@@ -19,6 +19,7 @@ package org.apache.rocketmq.client.impl.consumer;
 import org.apache.rocketmq.common.message.MessageQueue;
 
 public class PullRequest {
+    //组
     private String consumerGroup;
     private MessageQueue messageQueue;
     private ProcessQueue processQueue;

@@ -22,6 +22,9 @@ import java.lang.reflect.Constructor;
 import org.apache.rocketmq.store.MessageStore;
 
 public final class MessageStoreFactory {
+    /**
+     * 插件构建
+     */
     public final static MessageStore build(MessageStorePluginContext context, MessageStore messageStore)
         throws IOException {
         String plugin = context.getBrokerConfig().getMessageStorePlugIn();

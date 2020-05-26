@@ -23,6 +23,9 @@ import java.nio.charset.Charset;
 
 /**
  * Simple implement of bloom filter.
+ *
+ * 布隆过滤器实现
+ *
  */
 public class BloomFilter {
 

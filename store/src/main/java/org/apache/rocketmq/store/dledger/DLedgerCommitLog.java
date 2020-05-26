@@ -28,9 +28,11 @@ import io.openmessaging.storage.dledger.store.file.MmapFile;
 import io.openmessaging.storage.dledger.store.file.MmapFileList;
 import io.openmessaging.storage.dledger.store.file.SelectMmapBufferResult;
 import io.openmessaging.storage.dledger.utils.DLedgerUtils;
+
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
+
 import org.apache.rocketmq.common.UtilAll;
 import org.apache.rocketmq.common.message.MessageAccessor;
 import org.apache.rocketmq.common.message.MessageConst;
@@ -52,6 +54,13 @@ import org.apache.rocketmq.store.schedule.ScheduleMessageService;
 
 /**
  * Store all metadata downtime for recovery, data protection reliability
+ * 通过DLedger 实现数据同步
+ * <p>
+ * DLedger在CommitLog层实现，当主从变化的时候 将会透传给broker
+ *
+ * @link http://www.pianshen.com/article/8915195666/
+ * @link https://github.com/openmessaging/openmessaging-storage-dledger/blob/master/docs/cn/introduction_dledger.md
+ *
  */
 public class DLedgerCommitLog extends CommitLog {
     private final DLedgerServer dLedgerServer;
@@ -73,17 +82,22 @@ public class DLedgerCommitLog extends CommitLog {
 
     public DLedgerCommitLog(final DefaultMessageStore defaultMessageStore) {
         super(defaultMessageStore);
-        dLedgerConfig =  new DLedgerConfig();
+        dLedgerConfig = new DLedgerConfig();
         dLedgerConfig.setEnableDiskForceClean(defaultMessageStore.getMessageStoreConfig().isCleanFileForciblyEnable());
         dLedgerConfig.setStoreType(DLedgerConfig.FILE);
         dLedgerConfig.setSelfId(defaultMessageStore.getMessageStoreConfig().getdLegerSelfId());
         dLedgerConfig.setGroup(defaultMessageStore.getMessageStoreConfig().getdLegerGroup());
         dLedgerConfig.setPeers(defaultMessageStore.getMessageStoreConfig().getdLegerPeers());
+        //commitlog存放的位置相同 这个时候commitlog存放的位置其实就是DLedger中存放日志的位置
         dLedgerConfig.setStoreBaseDir(defaultMessageStore.getMessageStoreConfig().getStorePathRootDir());
         dLedgerConfig.setMappedFileSizeForEntryData(defaultMessageStore.getMessageStoreConfig().getMapedFileSizeCommitLog());
+        //什么时候删除日志
         dLedgerConfig.setDeleteWhen(defaultMessageStore.getMessageStoreConfig().getDeleteWhen());
+        //日志保存多久
         dLedgerConfig.setFileReservedHours(defaultMessageStore.getMessageStoreConfig().getFileReservedTime() + 1);
         id = Integer.valueOf(dLedgerConfig.getSelfId().substring(1)) + 1;
+
+        //启动DLedger
         dLedgerServer = new DLedgerServer(dLedgerConfig);
         dLedgerFileStore = (DLedgerMmapFileStore) dLedgerServer.getdLedgerStore();
         DLedgerMmapFileStore.AppendHook appendHook = (entry, buffer, bodyOffset) -> {
@@ -164,7 +178,6 @@ public class DLedgerCommitLog extends CommitLog {
     }
 
 
-
     @Override
     public long remainHowManyDataToCommit() {
         return dLedgerFileList.remainHowManyDataToCommit();
@@ -177,15 +190,15 @@ public class DLedgerCommitLog extends CommitLog {
 
     @Override
     public int deleteExpiredFile(
-        final long expiredTime,
-        final int deleteFilesInterval,
-        final long intervalForcibly,
-        final boolean cleanImmediately
+            final long expiredTime,
+            final int deleteFilesInterval,
+            final long intervalForcibly,
+            final boolean cleanImmediately
     ) {
         if (mappedFileQueue.getMappedFiles().isEmpty()) {
             refreshConfig();
             //To prevent too much log in defaultMessageStore
-            return  Integer.MAX_VALUE;
+            return Integer.MAX_VALUE;
         } else {
             disableDeleteDledger();
         }
@@ -251,7 +264,7 @@ public class DLedgerCommitLog extends CommitLog {
         if (mappedFile != null) {
             int pos = (int) (offset % mappedFileSize);
             SelectMmapBufferResult sbr = mappedFile.selectMappedBuffer(pos);
-            return  convertSbr(truncate(sbr));
+            return convertSbr(truncate(sbr));
         }
 
         return null;
@@ -283,7 +296,7 @@ public class DLedgerCommitLog extends CommitLog {
         if (mappedFile == null) {
             return;
         }
-        ByteBuffer byteBuffer =  mappedFile.sliceByteBuffer();
+        ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
         byteBuffer.position(mappedFile.getWrotePosition());
         boolean needWriteMagicCode = true;
         // 1 TOTAL SIZE
@@ -316,7 +329,7 @@ public class DLedgerCommitLog extends CommitLog {
     }
 
     @Override
-    public void recoverAbnormally(long maxPhyOffsetOfConsumeQueue)  {
+    public void recoverAbnormally(long maxPhyOffsetOfConsumeQueue) {
         recover(maxPhyOffsetOfConsumeQueue);
     }
 
@@ -327,16 +340,16 @@ public class DLedgerCommitLog extends CommitLog {
 
     @Override
     public DispatchRequest checkMessageAndReturnSize(ByteBuffer byteBuffer, final boolean checkCRC,
-        final boolean readBody) {
+                                                     final boolean readBody) {
         if (isInrecoveringOldCommitlog) {
             return super.checkMessageAndReturnSize(byteBuffer, checkCRC, readBody);
         }
         try {
             int bodyOffset = DLedgerEntry.BODY_OFFSET;
             int pos = byteBuffer.position();
-            int magic =  byteBuffer.getInt();
+            int magic = byteBuffer.getInt();
             //In dledger, this field is size, it must be gt 0, so it could prevent collision
-            int magicOld =  byteBuffer.getInt();
+            int magicOld = byteBuffer.getInt();
             if (magicOld == CommitLog.BLANK_MAGIC_CODE || magicOld == CommitLog.MESSAGE_MAGIC_CODE) {
                 byteBuffer.position(pos);
                 return super.checkMessageAndReturnSize(byteBuffer, checkCRC, readBody);
@@ -384,8 +397,9 @@ public class DLedgerCommitLog extends CommitLog {
 
         //should be consistent with the old version
         final int tranType = MessageSysFlag.getTransactionValue(msg.getSysFlag());
-        if (tranType == MessageSysFlag.TRANSACTION_NOT_TYPE
-            || tranType == MessageSysFlag.TRANSACTION_COMMIT_TYPE) {
+        if (tranType == MessageSysFlag.TRANSACTION_NOT_TYPE || tranType == MessageSysFlag.TRANSACTION_COMMIT_TYPE) {
+
+            //对于事务消息 或者重试消息 需要投入到SCHEDULE_TOPIC中重新的处理
             // Delay Delivery
             if (msg.getDelayTimeLevel() > 0) {
                 if (msg.getDelayTimeLevel() > this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel()) {
@@ -414,21 +428,23 @@ public class DLedgerCommitLog extends CommitLog {
         long eclipseTimeInLock;
         long queueOffset;
         try {
-            beginTimeInDledgerLock =  this.defaultMessageStore.getSystemClock().now();
+            beginTimeInDledgerLock = this.defaultMessageStore.getSystemClock().now();
+            //编码
             encodeResult = this.messageSerializer.serialize(msg);
             queueOffset = topicQueueTable.get(encodeResult.queueOffsetKey);
-            if (encodeResult.status  != AppendMessageStatus.PUT_OK) {
+            if (encodeResult.status != AppendMessageStatus.PUT_OK) {
                 return new PutMessageResult(PutMessageStatus.MESSAGE_ILLEGAL, new AppendMessageResult(encodeResult.status));
             }
             AppendEntryRequest request = new AppendEntryRequest();
             request.setGroup(dLedgerConfig.getGroup());
             request.setRemoteId(dLedgerServer.getMemberState().getSelfId());
             request.setBody(encodeResult.data);
+            //leader向所有的follower发送消息日志 只要过半的就认为本次消息添加成功
             dledgerFuture = (AppendFuture<AppendEntryResponse>) dLedgerServer.handleAppend(request);
             if (dledgerFuture.getPos() == -1) {
                 return new PutMessageResult(PutMessageStatus.OS_PAGECACHE_BUSY, new AppendMessageResult(AppendMessageStatus.UNKNOWN_ERROR));
             }
-            long wroteOffset =  dledgerFuture.getPos() + DLedgerEntry.BODY_OFFSET;
+            long wroteOffset = dledgerFuture.getPos() + DLedgerEntry.BODY_OFFSET;
             ByteBuffer buffer = ByteBuffer.allocate(MessageDecoder.MSG_ID_LENGTH);
             String msgId = MessageDecoder.createMessageId(buffer, msg.getStoreHostBytes(), wroteOffset);
             eclipseTimeInLock = this.defaultMessageStore.getSystemClock().now() - beginTimeInDledgerLock;
@@ -461,6 +477,7 @@ public class DLedgerCommitLog extends CommitLog {
         try {
             AppendEntryResponse appendEntryResponse = dledgerFuture.get(3, TimeUnit.SECONDS);
             switch (DLedgerResponseCode.valueOf(appendEntryResponse.getCode())) {
+                //已经全部成功了
                 case SUCCESS:
                     putMessageStatus = PutMessageStatus.PUT_OK;
                     break;
@@ -491,11 +508,13 @@ public class DLedgerCommitLog extends CommitLog {
         return putMessageResult;
     }
 
+    /**
+     * TODO DLedger 不支持批量插入？
+     */
     @Override
     public PutMessageResult putMessages(final MessageExtBatch messageExtBatch) {
         return new PutMessageResult(PutMessageStatus.MESSAGE_ILLEGAL, null);
     }
-
 
 
     @Override
@@ -507,7 +526,7 @@ public class DLedgerCommitLog extends CommitLog {
         MmapFile mappedFile = this.dLedgerFileList.findMappedFileByOffset(offset, offset == 0);
         if (mappedFile != null) {
             int pos = (int) (offset % mappedFileSize);
-            return  convertSbr(mappedFile.selectMappedBuffer(pos, size));
+            return convertSbr(mappedFile.selectMappedBuffer(pos, size));
         }
         return null;
     }
@@ -564,6 +583,7 @@ public class DLedgerCommitLog extends CommitLog {
         private String queueOffsetKey;
         private byte[] data;
         private AppendMessageStatus status;
+
         public EncodeResult(AppendMessageStatus status, byte[] data, String queueOffsetKey) {
             this.data = data;
             this.status = status;
@@ -604,6 +624,7 @@ public class DLedgerCommitLog extends CommitLog {
 
             this.resetByteBuffer(hostHolder, 8);
             // Record ConsumeQueue information
+            //ConsumeQueue
             keyBuilder.setLength(0);
             keyBuilder.append(msgInner.getTopic());
             keyBuilder.append('-');
@@ -611,6 +632,7 @@ public class DLedgerCommitLog extends CommitLog {
             String key = keyBuilder.toString();
 
             Long queueOffset = DLedgerCommitLog.this.topicQueueTable.get(key);
+            topicQueueTable.putIfAbsent(key,0L);
             if (null == queueOffset) {
                 queueOffset = 0L;
                 DLedgerCommitLog.this.topicQueueTable.put(key, queueOffset);
@@ -635,7 +657,7 @@ public class DLedgerCommitLog extends CommitLog {
              * Serialize message
              */
             final byte[] propertiesData =
-                msgInner.getPropertiesString() == null ? null : msgInner.getPropertiesString().getBytes(MessageDecoder.CHARSET_UTF8);
+                    msgInner.getPropertiesString() == null ? null : msgInner.getPropertiesString().getBytes(MessageDecoder.CHARSET_UTF8);
 
             final int propertiesLength = propertiesData == null ? 0 : propertiesData.length;
 
@@ -654,9 +676,10 @@ public class DLedgerCommitLog extends CommitLog {
             // Exceeds the maximum message
             if (msgLen > this.maxMessageSize) {
                 DLedgerCommitLog.log.warn("message size exceeded, msg total size: " + msgLen + ", msg body size: " + bodyLength
-                    + ", maxMessageSize: " + this.maxMessageSize);
+                        + ", maxMessageSize: " + this.maxMessageSize);
                 return new EncodeResult(AppendMessageStatus.MESSAGE_SIZE_EXCEEDED, null, key);
             }
+
             // Initialization of storage space
             this.resetByteBuffer(msgStoreItemMemory, msgLen);
             // 1 TOTALSIZE
@@ -706,6 +729,7 @@ public class DLedgerCommitLog extends CommitLog {
             byte[] data = new byte[msgLen];
             this.msgStoreItemMemory.clear();
             this.msgStoreItemMemory.get(data);
+            //序列化完成
             return new EncodeResult(AppendMessageStatus.PUT_OK, data, key);
         }
 
@@ -719,6 +743,7 @@ public class DLedgerCommitLog extends CommitLog {
     public static class DLedgerSelectMappedBufferResult extends SelectMappedBufferResult {
 
         private SelectMmapBufferResult sbr;
+
         public DLedgerSelectMappedBufferResult(SelectMmapBufferResult sbr) {
             super(sbr.getStartOffset(), sbr.getByteBuffer(), sbr.getSize(), null);
             this.sbr = sbr;

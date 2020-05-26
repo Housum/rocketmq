@@ -35,6 +35,7 @@ import org.apache.rocketmq.remoting.netty.ResponseFuture;
 import org.apache.rocketmq.remoting.protocol.LanguageCode;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -52,6 +53,7 @@ public class RemotingServerTest {
             @Override
             public RemotingCommand processRequest(ChannelHandlerContext ctx, RemotingCommand request) {
                 request.setRemark("Hi " + ctx.channel().remoteAddress());
+                Assert.assertEquals("Body",new String(request.getBody()));
                 return request;
             }
 
@@ -95,6 +97,7 @@ public class RemotingServerTest {
         requestHeader.setCount(1);
         requestHeader.setMessageTitle("Welcome");
         RemotingCommand request = RemotingCommand.createRequestCommand(0, requestHeader);
+        request.setBody("Body".getBytes());
         RemotingCommand response = remotingClient.invokeSync("localhost:8888", request, 1000 * 3);
         assertTrue(response != null);
         assertThat(response.getLanguage()).isEqualTo(LanguageCode.JAVA);

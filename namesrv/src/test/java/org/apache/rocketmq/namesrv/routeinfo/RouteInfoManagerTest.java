@@ -17,11 +17,18 @@
 package org.apache.rocketmq.namesrv.routeinfo;
 
 import io.netty.channel.Channel;
+
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+
 import org.apache.rocketmq.common.TopicConfig;
+import org.apache.rocketmq.common.constant.PermName;
 import org.apache.rocketmq.common.namesrv.RegisterBrokerResult;
 import org.apache.rocketmq.common.protocol.body.TopicConfigSerializeWrapper;
+import org.apache.rocketmq.common.protocol.route.QueueData;
 import org.apache.rocketmq.common.protocol.route.TopicRouteData;
 import org.junit.After;
 import org.junit.Assert;
@@ -73,21 +80,36 @@ public class RouteInfoManagerTest {
         topicConfigConcurrentHashMap.put("unit-test", topicConfig);
         topicConfigSerializeWrapper.setTopicConfigTable(topicConfigConcurrentHashMap);
         Channel channel = mock(Channel.class);
-        RegisterBrokerResult registerBrokerResult = routeInfoManager.registerBroker("default-cluster", "127.0.0.1:10911", "default-broker", 1234, "127.0.0.1:1001",
-            topicConfigSerializeWrapper, new ArrayList<String>(), channel);
+        RegisterBrokerResult registerBrokerResult = routeInfoManager.registerBroker("default-cluster", "127.0.0.1:10911", "default-broker", 0, "127.0.0.1:1001",
+                topicConfigSerializeWrapper, new ArrayList<String>(), channel);
         assertThat(registerBrokerResult).isNotNull();
     }
 
     @Test
-    public void testWipeWritePermOfBrokerByLock() {
+    public void testWipeWritePermOfBrokerByLock() throws Exception {
         int result = routeInfoManager.wipeWritePermOfBrokerByLock("default-broker");
-        assertThat(result).isEqualTo(0);
+        assertThat(result).isEqualTo(1);
+
+        Field field = RouteInfoManager.class.getDeclaredField("topicQueueTable");
+        field.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        HashMap<String/* topic */, List<QueueData>> qData = (HashMap<String/* topic */, List<QueueData>>) field.get(routeInfoManager);
+
+        List<QueueData> dataList = qData.get("unit-test");
+        Assert.assertEquals(1, dataList.size());
+        Assert.assertEquals(0, (dataList.get(0).getPerm() & PermName.PERM_WRITE));
+
     }
 
     @Test
     public void testPickupTopicRouteData() {
         TopicRouteData result = routeInfoManager.pickupTopicRouteData("unit_test");
         assertThat(result).isNull();
+
+        result = routeInfoManager.pickupTopicRouteData("unit-test");
+        assertThat(result).isNotNull();
+        assertThat(result.getQueueDatas().get(0).getBrokerName()).isEqualTo("default-broker");
     }
 
     @Test

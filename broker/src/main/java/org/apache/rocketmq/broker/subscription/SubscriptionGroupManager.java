@@ -31,11 +31,123 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.common.subscription.SubscriptionGroupConfig;
 import org.apache.rocketmq.remoting.protocol.RemotingSerializable;
 
+/**
+ * consumer的组订阅信息
+ *
+ *
+ * {
+ * 	"dataVersion":{
+ * 		"counter":1,
+ * 		"timestamp":1558597619458
+ *        },
+ * 	"subscriptionGroupTable":{
+ * 		"SELF_TEST_C_GROUP":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"SELF_TEST_C_GROUP",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        },
+ * 		"please_rename_unique_group_name_3":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"please_rename_unique_group_name_3",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        },
+ * 		"please_rename_unique_group_name_4":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"please_rename_unique_group_name_4",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        },
+ * 		"CID_ONSAPI_OWNER":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"CID_ONSAPI_OWNER",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        },
+ * 		"CID_ONSAPI_PERMISSION":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"CID_ONSAPI_PERMISSION",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        },
+ * 		"TOOLS_CONSUMER":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"TOOLS_CONSUMER",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        },
+ * 		"CID_ONS-HTTP-PROXY":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"CID_ONS-HTTP-PROXY",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        },
+ * 		"FILTERSRV_CONSUMER":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"FILTERSRV_CONSUMER",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        },
+ * 		"CID_ONSAPI_PULL":{
+ * 			"brokerId":0,
+ * 			"consumeBroadcastEnable":true,
+ * 			"consumeEnable":true,
+ * 			"consumeFromMinEnable":true,
+ * 			"groupName":"CID_ONSAPI_PULL",
+ * 			"notifyConsumerIdsChangedEnable":true,
+ * 			"retryMaxTimes":16,
+ * 			"retryQueueNums":1,
+ * 			"whichBrokerWhenConsumeSlowly":1
+ *        }
+ *    }
+ *  }
+ */
 public class SubscriptionGroupManager extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
 
-    private final ConcurrentMap<String, SubscriptionGroupConfig> subscriptionGroupTable =
-        new ConcurrentHashMap<String, SubscriptionGroupConfig>(1024);
+    //组名-订阅信息
+    private final ConcurrentMap<String, SubscriptionGroupConfig> subscriptionGroupTable =new ConcurrentHashMap<String, SubscriptionGroupConfig>(1024);
     private final DataVersion dataVersion = new DataVersion();
     private transient BrokerController brokerController;
 
@@ -49,6 +161,8 @@ public class SubscriptionGroupManager extends ConfigManager {
     }
 
     private void init() {
+
+        //以下部分都是系统级别的 默认创建的订阅组
         {
             SubscriptionGroupConfig subscriptionGroupConfig = new SubscriptionGroupConfig();
             subscriptionGroupConfig.setGroupName(MixAll.TOOLS_CONSUMER_GROUP);
@@ -120,6 +234,7 @@ public class SubscriptionGroupManager extends ConfigManager {
     public SubscriptionGroupConfig findSubscriptionGroupConfig(final String group) {
         SubscriptionGroupConfig subscriptionGroupConfig = this.subscriptionGroupTable.get(group);
         if (null == subscriptionGroupConfig) {
+            //是否自己创建组
             if (brokerController.getBrokerConfig().isAutoCreateSubscriptionGroup() || MixAll.isSysConsumerGroup(group)) {
                 subscriptionGroupConfig = new SubscriptionGroupConfig();
                 subscriptionGroupConfig.setGroupName(group);

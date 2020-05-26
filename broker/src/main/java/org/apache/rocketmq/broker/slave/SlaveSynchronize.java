@@ -28,6 +28,13 @@ import org.apache.rocketmq.common.protocol.body.SubscriptionGroupWrapper;
 import org.apache.rocketmq.common.protocol.body.TopicConfigSerializeWrapper;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
 
+/**
+ * broker的salve同步信息
+ *
+ * 对于provider来说 将会nameserver获取到broker的master节点 随机连接一个
+ * 所以所有的变更都需要salve从master同步过来
+ *
+ */
 public class SlaveSynchronize {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private final BrokerController brokerController;
@@ -41,33 +48,43 @@ public class SlaveSynchronize {
         return masterAddr;
     }
 
+    /**
+     * 设置broker的master地址 该地址在broker注册到nameserver之后,
+     * nameserver将会把地址返回,这个时候进行设置
+     */
     public void setMasterAddr(String masterAddr) {
         this.masterAddr = masterAddr;
     }
 
     public void syncAll() {
+        //同步topic信息
         this.syncTopicConfig();
+        //同步consumer 的消费offset
         this.syncConsumerOffset();
+        //同步延迟的offset
         this.syncDelayOffset();
+        //同步订阅的信息
         this.syncSubscriptionGroupConfig();
     }
 
     private void syncTopicConfig() {
         String masterAddrBak = this.masterAddr;
+
         if (masterAddrBak != null && !masterAddrBak.equals(brokerController.getBrokerAddr())) {
             try {
-                TopicConfigSerializeWrapper topicWrapper =
-                    this.brokerController.getBrokerOuterAPI().getAllTopicConfig(masterAddrBak);
-                if (!this.brokerController.getTopicConfigManager().getDataVersion()
-                    .equals(topicWrapper.getDataVersion())) {
+                //当前不是master,从master中topic
+                TopicConfigSerializeWrapper topicWrapper = this.brokerController.getBrokerOuterAPI().getAllTopicConfig(masterAddrBak);
 
-                    this.brokerController.getTopicConfigManager().getDataVersion()
-                        .assignNewOne(topicWrapper.getDataVersion());
+                //如果从master获取到的topic的时候与当前的topic版本不一样的话,那么进行更新
+                if (!this.brokerController.getTopicConfigManager().getDataVersion().equals(topicWrapper.getDataVersion())) {
+
+                    //设置新版本
+                    this.brokerController.getTopicConfigManager().getDataVersion().assignNewOne(topicWrapper.getDataVersion());
                     this.brokerController.getTopicConfigManager().getTopicConfigTable().clear();
-                    this.brokerController.getTopicConfigManager().getTopicConfigTable()
-                        .putAll(topicWrapper.getTopicConfigTable());
+                    //设置新的topic信息
+                    this.brokerController.getTopicConfigManager().getTopicConfigTable().putAll(topicWrapper.getTopicConfigTable());
+                    //进行持久化
                     this.brokerController.getTopicConfigManager().persist();
-
                     log.info("Update slave topic config from master, {}", masterAddrBak);
                 }
             } catch (Exception e) {
@@ -78,6 +95,8 @@ public class SlaveSynchronize {
 
     private void syncConsumerOffset() {
         String masterAddrBak = this.masterAddr;
+
+        //同上 非master的时候进行同步信息
         if (masterAddrBak != null && !masterAddrBak.equals(brokerController.getBrokerAddr())) {
             try {
                 ConsumerOffsetSerializeWrapper offsetWrapper =
@@ -93,6 +112,7 @@ public class SlaveSynchronize {
     }
 
     private void syncDelayOffset() {
+        //同上 非master的时候进行同步信息
         String masterAddrBak = this.masterAddr;
         if (masterAddrBak != null && !masterAddrBak.equals(brokerController.getBrokerAddr())) {
             try {
@@ -117,6 +137,8 @@ public class SlaveSynchronize {
     }
 
     private void syncSubscriptionGroupConfig() {
+
+        //同上 非master的时候进行同步信息
         String masterAddrBak = this.masterAddr;
         if (masterAddrBak != null  && !masterAddrBak.equals(brokerController.getBrokerAddr())) {
             try {

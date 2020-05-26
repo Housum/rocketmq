@@ -25,10 +25,17 @@ import java.util.HashMap;
 import java.util.List;
 import org.apache.rocketmq.remoting.protocol.RemotingSerializable;
 
+/**
+ * topic信息
+ */
 public class TopicRouteData extends RemotingSerializable {
+    //org.apache.rocketmq.namesrv.processor.ClusterTestRequestProcessor.getRouteInfoByTopic
     private String orderTopicConf;
+    //broker集群概述信息(brokerName,readNum,writeNum)
     private List<QueueData> queueDatas;
+    //多个broker主从中每个节点的详细信息(cluster,brokerName, brokerId-> brokerAddr)
     private List<BrokerData> brokerDatas;
+    //broker对于的过滤
     private HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
     public TopicRouteData cloneTopicRouteData() {

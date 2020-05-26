@@ -40,8 +40,7 @@ public class ExpressionMessageFilter implements MessageFilter {
     protected final ConsumerFilterManager consumerFilterManager;
     protected final boolean bloomDataValid;
 
-    public ExpressionMessageFilter(SubscriptionData subscriptionData, ConsumerFilterData consumerFilterData,
-        ConsumerFilterManager consumerFilterManager) {
+    public ExpressionMessageFilter(SubscriptionData subscriptionData, ConsumerFilterData consumerFilterData, ConsumerFilterManager consumerFilterManager) {
         this.subscriptionData = subscriptionData;
         this.consumerFilterData = consumerFilterData;
         this.consumerFilterManager = consumerFilterManager;
@@ -49,6 +48,7 @@ public class ExpressionMessageFilter implements MessageFilter {
             bloomDataValid = false;
             return;
         }
+        //布隆过滤器
         BloomFilter bloomFilter = this.consumerFilterManager.getBloomFilter();
         if (bloomFilter != null && bloomFilter.isValid(consumerFilterData.getBloomFilterData())) {
             bloomDataValid = true;
@@ -62,22 +62,20 @@ public class ExpressionMessageFilter implements MessageFilter {
         if (null == subscriptionData) {
             return true;
         }
-
         if (subscriptionData.isClassFilterMode()) {
             return true;
         }
 
         // by tags code.
         if (ExpressionType.isTagType(subscriptionData.getExpressionType())) {
-
             if (tagsCode == null) {
                 return true;
             }
-
+            //如果是订阅所有的 那么直接返回true
             if (subscriptionData.getSubString().equals(SubscriptionData.SUB_ALL)) {
                 return true;
             }
-
+            //是否包含
             return subscriptionData.getCodeSet().contains(tagsCode.intValue());
         } else {
             // no expression or no bloom
@@ -85,23 +83,23 @@ public class ExpressionMessageFilter implements MessageFilter {
                 || consumerFilterData.getCompiledExpression() == null || consumerFilterData.getBloomFilterData() == null) {
                 return true;
             }
-
             // message is before consumer
             if (cqExtUnit == null || !consumerFilterData.isMsgInLive(cqExtUnit.getMsgStoreTime())) {
                 log.debug("Pull matched because not in live: {}, {}", consumerFilterData, cqExtUnit);
                 return true;
             }
-
+            //具体表达式的位图 在构建conusmeQueue时候创建的
+            //@see org.apache.rocketmq.store.ConsumeQueue.putMessagePositionInfoWrapper
             byte[] filterBitMap = cqExtUnit.getFilterBitMap();
             BloomFilter bloomFilter = this.consumerFilterManager.getBloomFilter();
             if (filterBitMap == null || !this.bloomDataValid
                 || filterBitMap.length * Byte.SIZE != consumerFilterData.getBloomFilterData().getBitNum()) {
                 return true;
             }
-
             BitsArray bitsArray = null;
             try {
                 bitsArray = BitsArray.create(filterBitMap);
+                //执行布隆过滤器进行过滤
                 boolean ret = bloomFilter.isHit(consumerFilterData.getBloomFilterData(), bitsArray);
                 log.debug("Pull {} by bit map:{}, {}, {}", ret, consumerFilterData, bitsArray, cqExtUnit);
                 return ret;

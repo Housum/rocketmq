@@ -19,6 +19,7 @@ package org.apache.rocketmq.store;
 
 /**
  * Dispatcher of commit log.
+ * 事件分发 比如索引的建立;ConsumeQueue的构建都是在其中做的
  */
 public interface CommitLogDispatcher {
 

@@ -45,9 +45,11 @@ public class TransientStorePool {
 
     /**
      * It's a heavy init method.
+     * 该初始化方法十分的耗费内存 这里是否可以加上启动的校验
      */
     public void init() {
         for (int i = 0; i < poolSize; i++) {
+            //使用的是直接内存
             ByteBuffer byteBuffer = ByteBuffer.allocateDirect(fileSize);
 
             final long address = ((DirectBuffer) byteBuffer).address();
@@ -66,12 +68,18 @@ public class TransientStorePool {
         }
     }
 
+    /**
+     * 将内存放回到缓存池中
+     */
     public void returnBuffer(ByteBuffer byteBuffer) {
         byteBuffer.position(0);
         byteBuffer.limit(fileSize);
         this.availableBuffers.offerFirst(byteBuffer);
     }
 
+    /**
+     * 归还内存
+     */
     public ByteBuffer borrowBuffer() {
         ByteBuffer buffer = availableBuffers.pollFirst();
         if (availableBuffers.size() < poolSize * 0.4) {

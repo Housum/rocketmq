@@ -39,6 +39,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Consumer filter data manager.Just manage the consumers use expression filter.
+ *
+ * consumer过滤管理器
  */
 public class ConsumerFilterManager extends ConfigManager {
 
@@ -46,8 +48,7 @@ public class ConsumerFilterManager extends ConfigManager {
 
     private static final long MS_24_HOUR = 24 * 3600 * 1000;
 
-    private ConcurrentMap<String/*Topic*/, FilterDataMapByTopic>
-        filterDataByTopic = new ConcurrentHashMap<String/*consumer group*/, FilterDataMapByTopic>(256);
+    private ConcurrentMap<String/*Topic*/, FilterDataMapByTopic> filterDataByTopic = new ConcurrentHashMap<String/*consumer group*/, FilterDataMapByTopic>(256);
 
     private transient BrokerController brokerController;
     private transient BloomFilter bloomFilter;
@@ -77,6 +78,8 @@ public class ConsumerFilterManager extends ConfigManager {
     public static ConsumerFilterData build(final String topic, final String consumerGroup,
         final String expression, final String type,
         final long clientVersion) {
+
+        //如果是TAG表达式 那么不进行解析
         if (ExpressionType.isTagType(type)) {
             return null;
         }
@@ -90,9 +93,8 @@ public class ConsumerFilterManager extends ConfigManager {
         consumerFilterData.setExpressionType(type);
         consumerFilterData.setClientVersion(clientVersion);
         try {
-            consumerFilterData.setCompiledExpression(
-                FilterFactory.INSTANCE.get(type).compile(expression)
-            );
+            //构建表达式对象 SQL92
+            consumerFilterData.setCompiledExpression(FilterFactory.INSTANCE.get(type).compile(expression));
         } catch (Throwable e) {
             log.error("parse error: expr={}, topic={}, group={}, error={}", expression, topic, consumerGroup, e.getMessage());
             return null;
@@ -322,8 +324,7 @@ public class ConsumerFilterManager extends ConfigManager {
 
     public static class FilterDataMapByTopic {
 
-        private ConcurrentMap<String/*consumer group*/, ConsumerFilterData>
-            groupFilterData = new ConcurrentHashMap<String, ConsumerFilterData>();
+        private ConcurrentMap<String/*consumer group*/, ConsumerFilterData> groupFilterData = new ConcurrentHashMap<String, ConsumerFilterData>();
 
         private String topic;
 

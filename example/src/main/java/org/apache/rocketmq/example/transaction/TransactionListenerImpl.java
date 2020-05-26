@@ -34,6 +34,10 @@ public class TransactionListenerImpl implements TransactionListener {
         int value = transactionIndex.getAndIncrement();
         int status = value % 3;
         localTrans.put(msg.getTransactionId(), status);
+        //这里返回UNKNOW原因是制造本地事务状态不明,所以broker会正对这部分
+        //事务调用checkLocalTransaction,其中会带会事务ID
+        //如果这里返回COMMIT_MESSAGE 那么直接就表事务成功了.该消息就完成了
+        //如果返回ROLLBACK_MESSAGE 那么就直接认为失败了
         return LocalTransactionState.UNKNOW;
     }
 

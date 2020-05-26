@@ -18,6 +18,9 @@ package org.apache.rocketmq.store;
 
 import java.util.Map;
 
+/**
+ * 从commitlog中构建出来的分发数据 可以基于此进行自定义操作
+ */
 public class DispatchRequest {
     private final String topic;
     private final int queueId;

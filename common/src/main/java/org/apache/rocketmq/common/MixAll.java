@@ -300,6 +300,7 @@ public class MixAll {
         for (Field field : fields) {
             if (!Modifier.isStatic(field.getModifiers())) {
                 String name = field.getName();
+                //this打头的方法不会被获取参数
                 if (!name.startsWith("this")) {
                     Object value = null;
                     try {

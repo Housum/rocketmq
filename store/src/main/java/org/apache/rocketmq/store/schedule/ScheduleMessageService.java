@@ -44,6 +44,9 @@ import org.apache.rocketmq.store.PutMessageStatus;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
 
+/**
+ * 调度任务 内部消息可以投递到其中 处理延迟的消息或者是重投的消息
+ */
 public class ScheduleMessageService extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
@@ -117,6 +120,8 @@ public class ScheduleMessageService extends ConfigManager {
                 Integer level = entry.getKey();
                 Long timeDelay = entry.getValue();
                 Long offset = this.offsetTable.get(level);
+
+                //每个等级都是从0开始遍历的
                 if (null == offset) {
                     offset = 0L;
                 }
@@ -191,6 +196,7 @@ public class ScheduleMessageService extends ConfigManager {
 
     public boolean parseDelayLevel() {
         HashMap<String, Long> timeUnitTable = new HashMap<String, Long>();
+        //设计这么几个等级的延迟 秒 分 时 天
         timeUnitTable.put("s", 1000L);
         timeUnitTable.put("m", 1000L * 60);
         timeUnitTable.put("h", 1000L * 60 * 60);
@@ -201,6 +207,7 @@ public class ScheduleMessageService extends ConfigManager {
             String[] levelArray = levelString.split(" ");
             for (int i = 0; i < levelArray.length; i++) {
                 String value = levelArray[i];
+                //最后以为是手时间格式
                 String ch = value.substring(value.length() - 1);
                 Long tu = timeUnitTable.get(ch);
 
@@ -208,6 +215,7 @@ public class ScheduleMessageService extends ConfigManager {
                 if (level > this.maxDelayLevel) {
                     this.maxDelayLevel = level;
                 }
+                //前面是延迟的时间
                 long num = Long.parseLong(value.substring(0, value.length() - 1));
                 long delayTimeMillis = tu * num;
                 this.delayLevelTable.put(level, delayTimeMillis);
@@ -260,13 +268,13 @@ public class ScheduleMessageService extends ConfigManager {
         }
 
         public void executeOnTimeup() {
-            ConsumeQueue cq =
-                ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(SCHEDULE_TOPIC,
-                    delayLevel2QueueId(delayLevel));
+            //获取到SCHEDULE_TOPIC的consumeQueue
+            ConsumeQueue cq = ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(SCHEDULE_TOPIC, delayLevel2QueueId(delayLevel));
 
             long failScheduleOffset = offset;
 
             if (cq != null) {
+                //获取数据
                 SelectMappedBufferResult bufferCQ = cq.getIndexBuffer(this.offset);
                 if (bufferCQ != null) {
                     try {
@@ -297,23 +305,22 @@ public class ScheduleMessageService extends ConfigManager {
 
                             long countdown = deliverTimestamp - now;
 
+                            //如果已经到需要触发的时间点了 那么对该消息进行处理
                             if (countdown <= 0) {
-                                MessageExt msgExt =
-                                    ScheduleMessageService.this.defaultMessageStore.lookMessageByOffset(
-                                        offsetPy, sizePy);
+                                //获取commitlog文件的中数据
+                                MessageExt msgExt = ScheduleMessageService.this.defaultMessageStore.lookMessageByOffset(offsetPy, sizePy);
 
                                 if (msgExt != null) {
                                     try {
                                         MessageExtBrokerInner msgInner = this.messageTimeup(msgExt);
-                                        PutMessageResult putMessageResult =
-                                            ScheduleMessageService.this.writeMessageStore
-                                                .putMessage(msgInner);
+                                        //重新添加进行
+                                        PutMessageResult putMessageResult = ScheduleMessageService.this.writeMessageStore.putMessage(msgInner);
 
-                                        if (putMessageResult != null
-                                            && putMessageResult.getPutMessageStatus() == PutMessageStatus.PUT_OK) {
+                                        if (putMessageResult != null && putMessageResult.getPutMessageStatus() == PutMessageStatus.PUT_OK) {
                                             continue;
                                         } else {
                                             // XXX: warn and notify me
+                                            //重投失败 重新加入到队列中
                                             log.error(
                                                 "ScheduleMessageService, a message time up, but reput it failed, topic: {} msgId {}",
                                                 msgExt.getTopic(), msgExt.getMsgId());
@@ -392,6 +399,7 @@ public class ScheduleMessageService extends ConfigManager {
             msgInner.setWaitStoreMsgOK(false);
             MessageAccessor.clearProperty(msgInner, MessageConst.PROPERTY_DELAY_TIME_LEVEL);
 
+            //设置真实的topic
             msgInner.setTopic(msgInner.getProperty(MessageConst.PROPERTY_REAL_TOPIC));
 
             String queueIdStr = msgInner.getProperty(MessageConst.PROPERTY_REAL_QUEUE_ID);

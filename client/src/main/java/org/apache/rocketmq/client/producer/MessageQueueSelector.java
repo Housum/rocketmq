@@ -20,6 +20,17 @@ import java.util.List;
 import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.common.message.MessageQueue;
 
+/**
+ * 消息发送的选择器 通过该选择器 可以计算出最终消息发送的MessageQueue
+ * 对于消息发送到同一个MessageQueue来说,consumer消费的时候能够保证有序的消息
+ * 底层实现就是创建一个consumeQueue
+ *
+ */
 public interface MessageQueueSelector {
+    /**
+     * @param mqs 所有的MessageQueue
+     * @param msg 消息
+     * @param arg 应用传入的参数 透传
+     */
     MessageQueue select(final List<MessageQueue> mqs, final Message msg, final Object arg);
 }

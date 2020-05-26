@@ -44,6 +44,8 @@ public class DefaultConsumerIdsChangeListener implements ConsumerIdsChangeListen
                 List<Channel> channels = (List<Channel>) args[0];
                 if (channels != null && brokerController.getBrokerConfig().isNotifyConsumerIdsChangedEnable()) {
                     for (Channel chl : channels) {
+                        //将consumer组变换的信息通知给同组的consumer，同步的consumer将会立即发送负载操作
+                        //org.apache.rocketmq.client.impl.ClientRemotingProcessor.processRequest
                         this.brokerController.getBroker2Client().notifyConsumerIdsChanged(chl, group);
                     }
                 }

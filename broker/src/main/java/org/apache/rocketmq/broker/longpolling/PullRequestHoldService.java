@@ -29,6 +29,10 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.ConsumeQueueExt;
 
+/**
+ * 长轮询请求,对于未找到消息的可以设置挂起,然后,定时去指定的consumelog以及commitlog中获取
+ *
+ */
 public class PullRequestHoldService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private static final String TOPIC_QUEUEID_SEPARATOR = "@";
@@ -42,6 +46,7 @@ public class PullRequestHoldService extends ServiceThread {
     }
 
     public void suspendPullRequest(final String topic, final int queueId, final PullRequest pullRequest) {
+        //指定topic以及queueid
         String key = this.buildKey(topic, queueId);
         ManyPullRequest mpr = this.pullRequestTable.get(key);
         if (null == mpr) {
@@ -52,6 +57,7 @@ public class PullRequestHoldService extends ServiceThread {
             }
         }
 
+        //将请求放入到其中 在对象中存储了请求的client的channel等各种详细的信息,后台会有一个线程定时的去跑任务检查是否存在消息
         mpr.addPullRequest(pullRequest);
     }
 
@@ -93,6 +99,7 @@ public class PullRequestHoldService extends ServiceThread {
         return PullRequestHoldService.class.getSimpleName();
     }
 
+    //检查hold住的请求 如果未超时 进行处理
     private void checkHoldRequest() {
         for (String key : this.pullRequestTable.keySet()) {
             String[] kArray = key.split(TOPIC_QUEUEID_SEPARATOR);

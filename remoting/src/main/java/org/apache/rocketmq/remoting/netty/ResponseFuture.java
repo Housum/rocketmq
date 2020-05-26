@@ -24,6 +24,9 @@ import org.apache.rocketmq.remoting.InvokeCallback;
 import org.apache.rocketmq.remoting.common.SemaphoreReleaseOnlyOnce;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+/**
+ * 异步请求
+ */
 public class ResponseFuture {
     private final int opaque;
     private final Channel processChannel;
@@ -67,6 +70,7 @@ public class ResponseFuture {
         return diff > this.timeoutMillis;
     }
 
+    //一直等待有结果
     public RemotingCommand waitResponse(final long timeoutMillis) throws InterruptedException {
         this.countDownLatch.await(timeoutMillis, TimeUnit.MILLISECONDS);
         return this.responseCommand;

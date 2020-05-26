@@ -18,13 +18,20 @@ package org.apache.rocketmq.common;
 
 import org.apache.rocketmq.common.constant.PermName;
 
+/**
+ * topic信息
+ */
 public class TopicConfig {
     private static final String SEPARATOR = " ";
     public static int defaultReadQueueNums = 16;
     public static int defaultWriteQueueNums = 16;
+    //topic的名字
     private String topicName;
+
+    //分区的个数
     private int readQueueNums = defaultReadQueueNums;
     private int writeQueueNums = defaultWriteQueueNums;
+
     private int perm = PermName.PERM_READ | PermName.PERM_WRITE;
     private TopicFilterType topicFilterType = TopicFilterType.SINGLE_TAG;
     private int topicSysFlag = 0;
@@ -61,20 +68,14 @@ public class TopicConfig {
 
     public boolean decode(final String in) {
         String[] strs = in.split(SEPARATOR);
-        if (strs != null && strs.length == 5) {
+        if (strs.length == 5) {
             this.topicName = strs[0];
-
             this.readQueueNums = Integer.parseInt(strs[1]);
-
             this.writeQueueNums = Integer.parseInt(strs[2]);
-
             this.perm = Integer.parseInt(strs[3]);
-
             this.topicFilterType = TopicFilterType.valueOf(strs[4]);
-
             return true;
         }
-
         return false;
     }
 

@@ -51,6 +51,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentMap;
 
+/**
+ * broker向client端发送消息 (包含了consumer和provider)
+ */
 public class Broker2Client {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private final BrokerController brokerController;
@@ -59,13 +62,9 @@ public class Broker2Client {
         this.brokerController = brokerController;
     }
 
-    public void checkProducerTransactionState(
-        final String group,
-        final Channel channel,
-        final CheckTransactionStateRequestHeader requestHeader,
-        final MessageExt messageExt) throws Exception {
-        RemotingCommand request =
-            RemotingCommand.createRequestCommand(RequestCode.CHECK_TRANSACTION_STATE, requestHeader);
+    //向provider发送消息 检查事务的状态
+    public void checkProducerTransactionState(final String group, final Channel channel, final CheckTransactionStateRequestHeader requestHeader, final MessageExt messageExt) throws Exception {
+        RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.CHECK_TRANSACTION_STATE, requestHeader);
         request.setBody(MessageDecoder.encode(messageExt, false));
         try {
             this.brokerController.getRemotingServer().invokeOneway(channel, request, 10);
@@ -74,15 +73,12 @@ public class Broker2Client {
         }
     }
 
-    public RemotingCommand callClient(final Channel channel,
-                                      final RemotingCommand request
-    ) throws RemotingSendRequestException, RemotingTimeoutException, InterruptedException {
+    //向client端发送消息
+    public RemotingCommand callClient(final Channel channel, final RemotingCommand request) throws RemotingSendRequestException, RemotingTimeoutException, InterruptedException {
         return this.brokerController.getRemotingServer().invokeSync(channel, request, 10000);
     }
 
-    public void notifyConsumerIdsChanged(
-        final Channel channel,
-        final String consumerGroup) {
+    public void notifyConsumerIdsChanged(final Channel channel, final String consumerGroup) {
         if (null == consumerGroup) {
             log.error("notifyConsumerIdsChanged consumerGroup is null");
             return;
@@ -104,8 +100,15 @@ public class Broker2Client {
         return resetOffset(topic, group, timeStamp, isForce, false);
     }
 
-    public RemotingCommand resetOffset(String topic, String group, long timeStamp, boolean isForce,
-                                       boolean isC) {
+    /**
+     *
+     * @param topic topic
+     * @param group 组
+     * @param timeStamp 时间戳
+     * @param isForce 强制
+     * @param isC 是否是C语言
+     */
+    public RemotingCommand resetOffset(String topic, String group, long timeStamp, boolean isForce, boolean isC) {
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
 
         TopicConfig topicConfig = this.brokerController.getTopicConfigManager().selectTopicConfig(topic);
@@ -124,8 +127,8 @@ public class Broker2Client {
             mq.setTopic(topic);
             mq.setQueueId(i);
 
-            long consumerOffset =
-                this.brokerController.getConsumerOffsetManager().queryOffset(group, topic, i);
+            //获取到当前位置的offset
+            long consumerOffset = this.brokerController.getConsumerOffsetManager().queryOffset(group, topic, i);
             if (-1 == consumerOffset) {
                 response.setCode(ResponseCode.SYSTEM_ERROR);
                 response.setRemark(String.format("THe consumer group <%s> not exist", group));
@@ -145,6 +148,8 @@ public class Broker2Client {
                 timeStampOffset = 0;
             }
 
+            //如果需要reset的offset的位置比当前的消费位置的offset小的话,那么进行reset到指定的offset位置
+            //如果如果需要reset的offset的位置比当前的消费位置的offset大的话,那么还是以当前消费的位置的offset为准
             if (isForce || timeStampOffset < consumerOffset) {
                 offsetTable.put(mq, timeStampOffset);
             } else {
@@ -156,8 +161,7 @@ public class Broker2Client {
         requestHeader.setTopic(topic);
         requestHeader.setGroup(group);
         requestHeader.setTimestamp(timeStamp);
-        RemotingCommand request =
-            RemotingCommand.createRequestCommand(RequestCode.RESET_CONSUMER_CLIENT_OFFSET, requestHeader);
+        RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.RESET_CONSUMER_CLIENT_OFFSET, requestHeader);
         if (isC) {
             // c++ language
             ResetOffsetBodyForC body = new ResetOffsetBodyForC();
@@ -171,12 +175,10 @@ public class Broker2Client {
             request.setBody(body.encode());
         }
 
-        ConsumerGroupInfo consumerGroupInfo =
-            this.brokerController.getConsumerManager().getConsumerGroupInfo(group);
+        ConsumerGroupInfo consumerGroupInfo = this.brokerController.getConsumerManager().getConsumerGroupInfo(group);
 
         if (consumerGroupInfo != null && !consumerGroupInfo.getAllChannel().isEmpty()) {
-            ConcurrentMap<Channel, ClientChannelInfo> channelInfoTable =
-                consumerGroupInfo.getChannelInfoTable();
+            ConcurrentMap<Channel, ClientChannelInfo> channelInfoTable = consumerGroupInfo.getChannelInfoTable();
             for (Map.Entry<Channel, ClientChannelInfo> entry : channelInfoTable.entrySet()) {
                 int version = entry.getValue().getVersion();
                 if (version >= MQVersion.Version.V3_0_7_SNAPSHOT.ordinal()) {

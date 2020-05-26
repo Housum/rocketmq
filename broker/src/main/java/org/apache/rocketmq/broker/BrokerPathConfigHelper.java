@@ -31,18 +31,22 @@ public class BrokerPathConfigHelper {
         brokerConfigPath = path;
     }
 
+    //**/store/config/topics.json
     public static String getTopicConfigPath(final String rootDir) {
         return rootDir + File.separator + "config" + File.separator + "topics.json";
     }
 
+    //**/store/config/consumerOffset.json
     public static String getConsumerOffsetPath(final String rootDir) {
         return rootDir + File.separator + "config" + File.separator + "consumerOffset.json";
     }
 
+    //**/store/config/subscriptionGroup.json
     public static String getSubscriptionGroupPath(final String rootDir) {
         return rootDir + File.separator + "config" + File.separator + "subscriptionGroup.json";
     }
 
+    //**/store/config/consumerFilter.json
     public static String getConsumerFilterPath(final String rootDir) {
         return rootDir + File.separator + "config" + File.separator + "consumerFilter.json";
     }

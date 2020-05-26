@@ -31,14 +31,30 @@ import java.util.Collections;
  */
 public class ConsumerFilterData {
 
+    /**
+     * consumer的group
+     */
     private String consumerGroup;
+    /**
+     * 订阅的topic
+     */
     private String topic;
+    /**
+     * 表达式 TAG或者SQL92
+     */
     private String expression;
+    /**
+     * 表达式的类型
+     */
     private String expressionType;
+    //通过表达式计算出来的
     private transient Expression compiledExpression;
+    //创建时间
     private long bornTime;
     private long deadTime = 0;
+    //broker的filter采用的bloom过滤器
     private BloomFilterData bloomFilterData;
+    //客户端版本
     private long clientVersion;
 
     public boolean isDead() {

@@ -45,12 +45,13 @@ public class Producer {
          * </pre>
          */
 
+        producer.setNamesrvAddr("localhost:9876");
         /*
          * Launch the instance.
          */
         producer.start();
 
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 1; i++) {
             try {
 
                 /*

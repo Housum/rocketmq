@@ -27,6 +27,13 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ * 检测点
+ * 记录了commitlog的物理索引位置
+ * 记录了consumeQueue的索引位置
+ * 记录了索引位置
+ *
+ */
 public class StoreCheckpoint {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private final RandomAccessFile randomAccessFile;

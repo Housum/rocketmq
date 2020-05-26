@@ -35,6 +35,8 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         if (null == old) {
             final FaultItem faultItem = new FaultItem(name);
             faultItem.setCurrentLatency(currentLatency);
+            //注意这里 开始的时间是当前时间+需要延迟的时间
+            //@see org.apache.rocketmq.client.latency.LatencyFaultToleranceImpl.isAvailable
             faultItem.setStartTimestamp(System.currentTimeMillis() + notAvailableDuration);
 
             old = this.faultItemTable.putIfAbsent(name, faultItem);
@@ -52,6 +54,8 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
     public boolean isAvailable(final String name) {
         final FaultItem faultItem = this.faultItemTable.get(name);
         if (faultItem != null) {
+            //检查是否可用 检查faultItem的startTimestamp是否大于现在的时间
+            //@see org.apache.rocketmq.client.latency.LatencyFaultToleranceImpl.updateFaultItem
             return faultItem.isAvailable();
         }
         return true;

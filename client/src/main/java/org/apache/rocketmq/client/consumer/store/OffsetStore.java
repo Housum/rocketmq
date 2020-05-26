@@ -24,6 +24,8 @@ import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.remoting.exception.RemotingException;
 
 /**
+ *
+ * consumer消费的offset记录
  * Offset store interface
  */
 public interface OffsetStore {
@@ -65,6 +67,7 @@ public interface OffsetStore {
     Map<MessageQueue, Long> cloneOffsetTable(String topic);
 
     /**
+     * 将当前的offset更新到broker中去
      * @param mq
      * @param offset
      * @param isOneway

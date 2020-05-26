@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
 import org.apache.rocketmq.broker.BrokerController;
 import org.apache.rocketmq.broker.BrokerPathConfigHelper;
 import org.apache.rocketmq.common.ConfigManager;
@@ -40,13 +41,127 @@ import org.apache.rocketmq.common.protocol.body.KVTable;
 import org.apache.rocketmq.common.protocol.body.TopicConfigSerializeWrapper;
 import org.apache.rocketmq.common.sysflag.TopicSysFlag;
 
+/**
+ * broker中topic信息的管理
+ * <p>
+ * {
+ * "dataVersion":{
+ * "counter":6,
+ * "timestamp":1558597619467
+ * },
+ * "topicConfigTable":{
+ * "TopicTest":{
+ * "order":false,
+ * "perm":6,
+ * "readQueueNums":4,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"TopicTest",
+ * "topicSysFlag":0,
+ * "writeQueueNums":4
+ * },
+ * "TopicTestjjj":{
+ * "order":false,
+ * "perm":6,
+ * "readQueueNums":8,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"TopicTestjjj",
+ * "topicSysFlag":0,
+ * "writeQueueNums":8
+ * },
+ * "SELF_TEST_TOPIC":{
+ * "order":false,
+ * "perm":6,
+ * "readQueueNums":1,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"SELF_TEST_TOPIC",
+ * "topicSysFlag":0,
+ * "writeQueueNums":1
+ * },
+ * "DefaultCluster":{
+ * "order":false,
+ * "perm":7,
+ * "readQueueNums":16,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"DefaultCluster",
+ * "topicSysFlag":0,
+ * "writeQueueNums":16
+ * },
+ * "RMQ_SYS_TRANS_HALF_TOPIC":{
+ * "order":false,
+ * "perm":6,
+ * "readQueueNums":1,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"RMQ_SYS_TRANS_HALF_TOPIC",
+ * "topicSysFlag":0,
+ * "writeQueueNums":1
+ * },
+ * "luqibaodeMacBook-Pro.local":{
+ * "order":false,
+ * "perm":7,
+ * "readQueueNums":1,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"luqibaodeMacBook-Pro.local",
+ * "topicSysFlag":0,
+ * "writeQueueNums":1
+ * },
+ * "TBW102":{
+ * "order":false,
+ * "perm":7,
+ * "readQueueNums":8,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"TBW102",
+ * "topicSysFlag":0,
+ * "writeQueueNums":8
+ * },
+ * "BenchmarkTest":{
+ * "order":false,
+ * "perm":6,
+ * "readQueueNums":1024,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"BenchmarkTest",
+ * "topicSysFlag":0,
+ * "writeQueueNums":1024
+ * },
+ * "OFFSET_MOVED_EVENT":{
+ * "order":false,
+ * "perm":6,
+ * "readQueueNums":1,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"OFFSET_MOVED_EVENT",
+ * "topicSysFlag":0,
+ * "writeQueueNums":1
+ * },
+ * "%RETRY%please_rename_unique_group_name_4":{
+ * "order":false,
+ * "perm":6,
+ * "readQueueNums":1,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"%RETRY%please_rename_unique_group_name_4",
+ * "topicSysFlag":0,
+ * "writeQueueNums":1
+ * },
+ * "%RETRY%please_rename_unique_group_name_3":{
+ * "order":false,
+ * "perm":6,
+ * "readQueueNums":1,
+ * "topicFilterType":"SINGLE_TAG",
+ * "topicName":"%RETRY%please_rename_unique_group_name_3",
+ * "topicSysFlag":0,
+ * "writeQueueNums":1
+ * }
+ * }
+ * }
+ * <p>
+ * topic内存在存放的是topicConfigTable,在启动的时候将会从 user.home/store/topic.json中加载已经存在的topic
+ * 到topicConfigTable,在之后的CUD操作中会持久化回配置中
+ */
 public class TopicConfigManager extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private static final long LOCK_TIMEOUT_MILLIS = 3000;
     private transient final Lock lockTopicConfigTable = new ReentrantLock();
 
-    private final ConcurrentMap<String, TopicConfig> topicConfigTable =
-        new ConcurrentHashMap<String, TopicConfig>(1024);
+    //topicName - topic详细信息
+    private final ConcurrentMap<String, TopicConfig> topicConfigTable = new ConcurrentHashMap<String, TopicConfig>(1024);
     private final DataVersion dataVersion = new DataVersion();
     private final Set<String> systemTopicList = new HashSet<String>();
     private transient BrokerController brokerController;
@@ -56,6 +171,8 @@ public class TopicConfigManager extends ConfigManager {
 
     public TopicConfigManager(BrokerController brokerController) {
         this.brokerController = brokerController;
+
+        //加载系统几个topic信息
         {
             // MixAll.SELF_TEST_TOPIC
             String topic = MixAll.SELF_TEST_TOPIC;
@@ -72,9 +189,9 @@ public class TopicConfigManager extends ConfigManager {
                 TopicConfig topicConfig = new TopicConfig(topic);
                 this.systemTopicList.add(topic);
                 topicConfig.setReadQueueNums(this.brokerController.getBrokerConfig()
-                    .getDefaultTopicQueueNums());
+                        .getDefaultTopicQueueNums());
                 topicConfig.setWriteQueueNums(this.brokerController.getBrokerConfig()
-                    .getDefaultTopicQueueNums());
+                        .getDefaultTopicQueueNums());
                 int perm = PermName.PERM_INHERIT | PermName.PERM_READ | PermName.PERM_WRITE;
                 topicConfig.setPerm(perm);
                 this.topicConfigTable.put(topicConfig.getTopicName(), topicConfig);
@@ -91,6 +208,7 @@ public class TopicConfigManager extends ConfigManager {
         }
         {
 
+            //根据集群名字创建一个topic
             String topic = this.brokerController.getBrokerConfig().getBrokerClusterName();
             TopicConfig topicConfig = new TopicConfig(topic);
             this.systemTopicList.add(topic);
@@ -103,6 +221,7 @@ public class TopicConfigManager extends ConfigManager {
         }
         {
 
+            //再创建一个brokerName的topic
             String topic = this.brokerController.getBrokerConfig().getBrokerName();
             TopicConfig topicConfig = new TopicConfig(topic);
             this.systemTopicList.add(topic);
@@ -152,8 +271,8 @@ public class TopicConfigManager extends ConfigManager {
         return this.topicConfigTable.get(topic);
     }
 
-    public TopicConfig createTopicInSendMessageMethod(final String topic, final String defaultTopic,
-        final String remoteAddress, final int clientDefaultTopicQueueNums, final int topicSysFlag) {
+    public TopicConfig createTopicInSendMessageMethod(final String topic, final String defaultTopic, final String remoteAddress,
+                                                      final int clientDefaultTopicQueueNums, final int topicSysFlag) {
         TopicConfig topicConfig = null;
         boolean createNew = false;
 
@@ -166,18 +285,21 @@ public class TopicConfigManager extends ConfigManager {
 
                     TopicConfig defaultTopicConfig = this.topicConfigTable.get(defaultTopic);
                     if (defaultTopicConfig != null) {
+
+                        //如果设置的是自动创建
                         if (defaultTopic.equals(MixAll.AUTO_CREATE_TOPIC_KEY_TOPIC)) {
+                            //没有权限的话
                             if (!this.brokerController.getBrokerConfig().isAutoCreateTopicEnable()) {
                                 defaultTopicConfig.setPerm(PermName.PERM_READ | PermName.PERM_WRITE);
                             }
                         }
 
+                        //权限是继承的
                         if (PermName.isInherited(defaultTopicConfig.getPerm())) {
                             topicConfig = new TopicConfig(topic);
 
-                            int queueNums =
-                                clientDefaultTopicQueueNums > defaultTopicConfig.getWriteQueueNums() ? defaultTopicConfig
-                                    .getWriteQueueNums() : clientDefaultTopicQueueNums;
+                            //设置messageQueue的个数
+                            int queueNums = clientDefaultTopicQueueNums > defaultTopicConfig.getWriteQueueNums() ? defaultTopicConfig.getWriteQueueNums() : clientDefaultTopicQueueNums;
 
                             if (queueNums < 0) {
                                 queueNums = 0;
@@ -186,22 +308,23 @@ public class TopicConfigManager extends ConfigManager {
                             topicConfig.setReadQueueNums(queueNums);
                             topicConfig.setWriteQueueNums(queueNums);
                             int perm = defaultTopicConfig.getPerm();
+                            //去掉该权限
                             perm &= ~PermName.PERM_INHERIT;
                             topicConfig.setPerm(perm);
                             topicConfig.setTopicSysFlag(topicSysFlag);
                             topicConfig.setTopicFilterType(defaultTopicConfig.getTopicFilterType());
                         } else {
                             log.warn("Create new topic failed, because the default topic[{}] has no perm [{}] producer:[{}]",
-                                defaultTopic, defaultTopicConfig.getPerm(), remoteAddress);
+                                    defaultTopic, defaultTopicConfig.getPerm(), remoteAddress);
                         }
                     } else {
                         log.warn("Create new topic failed, because the default topic[{}] not exist. producer:[{}]",
-                            defaultTopic, remoteAddress);
+                                defaultTopic, remoteAddress);
                     }
 
                     if (topicConfig != null) {
                         log.info("Create new topic by default topic:[{}] config:[{}] producer:[{}]",
-                            defaultTopic, topicConfig, remoteAddress);
+                                defaultTopic, topicConfig, remoteAddress);
 
                         this.topicConfigTable.put(topic, topicConfig);
 
@@ -209,6 +332,7 @@ public class TopicConfigManager extends ConfigManager {
 
                         createNew = true;
 
+                        //进行持久化
                         this.persist();
                     }
                 } finally {
@@ -219,18 +343,27 @@ public class TopicConfigManager extends ConfigManager {
             log.error("createTopicInSendMessageMethod exception", e);
         }
 
+        //如果创建成功了话 那么将broker的信息进行同步到集群的其他节点
         if (createNew) {
-            this.brokerController.registerBrokerAll(false, true,true);
+            this.brokerController.registerBrokerAll(false, true, true);
         }
 
         return topicConfig;
     }
 
+    /**
+     * 在收到发送消息之后创建新的topic
+     *
+     * @param topic                       topic名称
+     * @param clientDefaultTopicQueueNums messageQueue的个数
+     * @param perm                        权限
+     * @param topicSysFlag                ？
+     */
     public TopicConfig createTopicInSendMessageBackMethod(
-        final String topic,
-        final int clientDefaultTopicQueueNums,
-        final int perm,
-        final int topicSysFlag) {
+            final String topic,
+            final int clientDefaultTopicQueueNums,
+            final int perm,
+            final int topicSysFlag) {
         TopicConfig topicConfig = this.topicConfigTable.get(topic);
         if (topicConfig != null)
             return topicConfig;
@@ -264,7 +397,7 @@ public class TopicConfigManager extends ConfigManager {
         }
 
         if (createNew) {
-            this.brokerController.registerBrokerAll(false, true,true);
+            this.brokerController.registerBrokerAll(false, true, true);
         }
 
         return topicConfig;
@@ -282,14 +415,14 @@ public class TopicConfigManager extends ConfigManager {
             }
 
             log.info("update topic sys flag. oldTopicSysFlag={}, newTopicSysFlag", oldTopicSysFlag,
-                topicConfig.getTopicSysFlag());
+                    topicConfig.getTopicSysFlag());
 
             this.topicConfigTable.put(topic, topicConfig);
 
             this.dataVersion.nextVersion();
 
             this.persist();
-            this.brokerController.registerBrokerAll(false, true,true);
+            this.brokerController.registerBrokerAll(false, true, true);
         }
     }
 
@@ -302,14 +435,14 @@ public class TopicConfigManager extends ConfigManager {
             }
 
             log.info("update topic sys flag. oldTopicSysFlag={}, newTopicSysFlag", oldTopicSysFlag,
-                topicConfig.getTopicSysFlag());
+                    topicConfig.getTopicSysFlag());
 
             this.topicConfigTable.put(topic, topicConfig);
 
             this.dataVersion.nextVersion();
 
             this.persist();
-            this.brokerController.registerBrokerAll(false, true,true);
+            this.brokerController.registerBrokerAll(false, true, true);
         }
     }
 
@@ -326,6 +459,11 @@ public class TopicConfigManager extends ConfigManager {
         this.persist();
     }
 
+    /**
+     * 根据有序topic的信息
+     * 在KVTable中是全量有序的topic,如果在其中不存在的那么都将被设置为
+     * 无序
+     */
     public void updateOrderTopicConfig(final KVTable orderKVTableFromNs) {
 
         if (orderKVTableFromNs != null && orderKVTableFromNs.getTable() != null) {
@@ -393,17 +531,19 @@ public class TopicConfigManager extends ConfigManager {
 
     @Override
     public String configFilePath() {
+        // **/store/config/topics.json
         return BrokerPathConfigHelper.getTopicConfigPath(this.brokerController.getMessageStoreConfig()
-            .getStorePathRootDir());
+                .getStorePathRootDir());
     }
 
     @Override
     public void decode(String jsonString) {
         if (jsonString != null) {
             TopicConfigSerializeWrapper topicConfigSerializeWrapper =
-                TopicConfigSerializeWrapper.fromJson(jsonString, TopicConfigSerializeWrapper.class);
+                    TopicConfigSerializeWrapper.fromJson(jsonString, TopicConfigSerializeWrapper.class);
             if (topicConfigSerializeWrapper != null) {
                 this.topicConfigTable.putAll(topicConfigSerializeWrapper.getTopicConfigTable());
+                //设置版本
                 this.dataVersion.assignNewOne(topicConfigSerializeWrapper.getDataVersion());
                 this.printLoadDataWhenFirstBoot(topicConfigSerializeWrapper);
             }
@@ -418,6 +558,7 @@ public class TopicConfigManager extends ConfigManager {
     }
 
     private void printLoadDataWhenFirstBoot(final TopicConfigSerializeWrapper tcs) {
+        //打印从硬盘中加载的topic
         Iterator<Entry<String, TopicConfig>> it = tcs.getTopicConfigTable().entrySet().iterator();
         while (it.hasNext()) {
             Entry<String, TopicConfig> next = it.next();

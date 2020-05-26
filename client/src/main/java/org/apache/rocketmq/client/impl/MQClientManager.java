@@ -46,11 +46,14 @@ public class MQClientManager {
 
     public MQClientInstance getAndCreateMQClientInstance(final ClientConfig clientConfig, RPCHook rpcHook) {
         String clientId = clientConfig.buildMQClientId();
+
+        //注意这里 这里clientId相同的共享一个MQClientInstance
+        //多个consumer producer将会共享同一个实例 如果不想使用同一个的话 那么可以通过
+        //设置
         MQClientInstance instance = this.factoryTable.get(clientId);
         if (null == instance) {
-            instance =
-                new MQClientInstance(clientConfig.cloneClientConfig(),
-                    this.factoryIndexGenerator.getAndIncrement(), clientId, rpcHook);
+            //很重要
+            instance = new MQClientInstance(clientConfig.cloneClientConfig(), this.factoryIndexGenerator.getAndIncrement(), clientId, rpcHook);
             MQClientInstance prev = this.factoryTable.putIfAbsent(clientId, instance);
             if (prev != null) {
                 instance = prev;

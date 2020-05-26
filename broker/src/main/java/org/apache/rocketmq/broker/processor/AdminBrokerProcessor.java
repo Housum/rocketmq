@@ -150,6 +150,7 @@ public class AdminBrokerProcessor implements NettyRequestProcessor {
             case RequestCode.GET_BROKER_RUNTIME_INFO:
                 return this.getBrokerRuntimeInfo(ctx, request);
             case RequestCode.LOCK_BATCH_MQ:
+                //对MessageQueue进行加锁操作 加锁的意义之一就是在有序的队列中  不允许多个消费者消费
                 return this.lockBatchMQ(ctx, request);
             case RequestCode.UNLOCK_BATCH_MQ:
                 return this.unlockBatchMQ(ctx, request);

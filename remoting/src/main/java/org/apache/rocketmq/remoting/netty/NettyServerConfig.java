@@ -16,10 +16,22 @@
  */
 package org.apache.rocketmq.remoting.netty;
 
+/**
+ * Netty服务端的配置
+ */
 public class NettyServerConfig implements Cloneable {
+    /**
+     * 默认的端口
+     */
     private int listenPort = 8888;
+    /**
+     * 业务处理的 worker线程数
+     */
     private int serverWorkerThreads = 8;
     private int serverCallbackExecutorThreads = 0;
+    /**
+     * netty worker的数量
+     */
     private int serverSelectorThreads = 3;
     private int serverOnewaySemaphoreValue = 256;
     private int serverAsyncSemaphoreValue = 64;
@@ -35,6 +47,9 @@ public class NettyServerConfig implements Cloneable {
      *
      * ../glibc-2.10.1/configure \ --prefix=/usr \ --with-headers=/usr/include \
      * --host=x86_64-linux-gnu \ --build=x86_64-pc-linux-gnu \ --without-gd
+     *
+     * 是否使用epoll
+     *
      */
     private boolean useEpollNativeSelector = false;
 

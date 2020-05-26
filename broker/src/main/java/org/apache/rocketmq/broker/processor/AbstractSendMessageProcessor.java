@@ -159,15 +159,14 @@ public abstract class AbstractSendMessageProcessor implements NettyRequestProces
         return response;
     }
 
-    protected RemotingCommand msgCheck(final ChannelHandlerContext ctx,
-        final SendMessageRequestHeader requestHeader, final RemotingCommand response) {
-        if (!PermName.isWriteable(this.brokerController.getBrokerConfig().getBrokerPermission())
-            && this.brokerController.getTopicConfigManager().isOrderTopic(requestHeader.getTopic())) {
+    protected RemotingCommand msgCheck(final ChannelHandlerContext ctx, final SendMessageRequestHeader requestHeader, final RemotingCommand response) {
+        if (!PermName.isWriteable(this.brokerController.getBrokerConfig().getBrokerPermission()) && this.brokerController.getTopicConfigManager().isOrderTopic(requestHeader.getTopic())) {
             response.setCode(ResponseCode.NO_PERMISSION);
             response.setRemark("the broker[" + this.brokerController.getBrokerConfig().getBrokerIP1()
                 + "] sending message is forbidden");
             return response;
         }
+
         if (!this.brokerController.getTopicConfigManager().isTopicCanSendMessage(requestHeader.getTopic())) {
             String errorMsg = "the topic[" + requestHeader.getTopic() + "] is conflict with system reserved words.";
             log.warn(errorMsg);
@@ -176,11 +175,11 @@ public abstract class AbstractSendMessageProcessor implements NettyRequestProces
             return response;
         }
 
-        TopicConfig topicConfig =
-            this.brokerController.getTopicConfigManager().selectTopicConfig(requestHeader.getTopic());
+        TopicConfig topicConfig = this.brokerController.getTopicConfigManager().selectTopicConfig(requestHeader.getTopic());
         if (null == topicConfig) {
             int topicSysFlag = 0;
             if (requestHeader.isUnitMode()) {
+                //如果是重试消息
                 if (requestHeader.getTopic().startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
                     topicSysFlag = TopicSysFlag.buildSysFlag(false, true);
                 } else {
@@ -283,13 +282,10 @@ public abstract class AbstractSendMessageProcessor implements NettyRequestProces
             case RequestCode.SEND_BATCH_MESSAGE:
             case RequestCode.SEND_MESSAGE_V2:
                 requestHeaderV2 =
-                    (SendMessageRequestHeaderV2) request
-                        .decodeCommandCustomHeader(SendMessageRequestHeaderV2.class);
+                    (SendMessageRequestHeaderV2) request.decodeCommandCustomHeader(SendMessageRequestHeaderV2.class);
             case RequestCode.SEND_MESSAGE:
                 if (null == requestHeaderV2) {
-                    requestHeader =
-                        (SendMessageRequestHeader) request
-                            .decodeCommandCustomHeader(SendMessageRequestHeader.class);
+                    requestHeader = (SendMessageRequestHeader) request.decodeCommandCustomHeader(SendMessageRequestHeader.class);
                 } else {
                     requestHeader = SendMessageRequestHeaderV2.createSendMessageRequestHeaderV1(requestHeaderV2);
                 }

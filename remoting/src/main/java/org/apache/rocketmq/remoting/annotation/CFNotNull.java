@@ -16,12 +16,18 @@
  */
 package org.apache.rocketmq.remoting.annotation;
 
+import org.apache.rocketmq.remoting.protocol.RemotingCommand;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * 字节不能为空
+ * @see RemotingCommand#isFieldNullable(java.lang.reflect.Field)
+ */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER, ElementType.LOCAL_VARIABLE})

@@ -16,17 +16,6 @@
  */
 package org.apache.rocketmq.client.impl.consumer;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
 import org.apache.rocketmq.client.QueryResult;
 import org.apache.rocketmq.client.Validators;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
@@ -56,12 +45,7 @@ import org.apache.rocketmq.common.UtilAll;
 import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
 import org.apache.rocketmq.common.filter.FilterAPI;
 import org.apache.rocketmq.common.help.FAQUrl;
-import org.apache.rocketmq.logging.InternalLogger;
-import org.apache.rocketmq.common.message.Message;
-import org.apache.rocketmq.common.message.MessageAccessor;
-import org.apache.rocketmq.common.message.MessageConst;
-import org.apache.rocketmq.common.message.MessageExt;
-import org.apache.rocketmq.common.message.MessageQueue;
+import org.apache.rocketmq.common.message.*;
 import org.apache.rocketmq.common.protocol.body.ConsumeStatus;
 import org.apache.rocketmq.common.protocol.body.ConsumerRunningInfo;
 import org.apache.rocketmq.common.protocol.body.ProcessQueueInfo;
@@ -72,9 +56,14 @@ import org.apache.rocketmq.common.protocol.heartbeat.SubscriptionData;
 import org.apache.rocketmq.common.protocol.route.BrokerData;
 import org.apache.rocketmq.common.protocol.route.TopicRouteData;
 import org.apache.rocketmq.common.sysflag.PullSysFlag;
+import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 import org.apache.rocketmq.remoting.exception.RemotingException;
+
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentMap;
 
 public class DefaultMQPushConsumerImpl implements MQConsumerInner {
     /**
@@ -93,18 +82,24 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
     private static final long CONSUMER_TIMEOUT_MILLIS_WHEN_SUSPEND = 1000 * 30;
     private final InternalLogger log = ClientLogger.getLog();
     private final DefaultMQPushConsumer defaultMQPushConsumer;
+    //consumer负载均衡 push消息处理
     private final RebalanceImpl rebalanceImpl = new RebalancePushImpl(this);
     private final ArrayList<FilterMessageHook> filterMessageHookList = new ArrayList<FilterMessageHook>();
     private final long consumerStartTimestamp = System.currentTimeMillis();
     private final ArrayList<ConsumeMessageHook> consumeMessageHookList = new ArrayList<ConsumeMessageHook>();
     private final RPCHook rpcHook;
     private volatile ServiceState serviceState = ServiceState.CREATE_JUST;
+    //client真实处理的地方
     private MQClientInstance mQClientFactory;
+    //想broker进行pull请求消息
     private PullAPIWrapper pullAPIWrapper;
     private volatile boolean pause = false;
     private boolean consumeOrderly = false;
+    //消息来的时候的监听
     private MessageListener messageListenerInner;
+    //consumer 消费的offset记录
     private OffsetStore offsetStore;
+    //consumer端消息处理
     private ConsumeMessageService consumeMessageService;
     private long queueFlowControlTimes = 0;
     private long queueMaxSpanFlowControlTimes = 0;
@@ -198,11 +193,13 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
     public void pullMessage(final PullRequest pullRequest) {
         final ProcessQueue processQueue = pullRequest.getProcessQueue();
+        //如果已经被丢失了 那么就不能够执行了 org.apache.rocketmq.client.impl.consumer.RebalanceImpl.updateProcessQueueTableInRebalance
         if (processQueue.isDropped()) {
             log.info("the pull request[{}] is dropped.", pullRequest.toString());
             return;
         }
 
+        //记录最后一次获取消息的时间
         pullRequest.getProcessQueue().setLastPullTimestamp(System.currentTimeMillis());
 
         try {
@@ -222,6 +219,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         long cachedMessageCount = processQueue.getMsgCount().get();
         long cachedMessageSizeInMiB = processQueue.getMsgSize().get() / (1024 * 1024);
 
+        //流控
         if (cachedMessageCount > this.defaultMQPushConsumer.getPullThresholdForQueue()) {
             this.executePullRequestLater(pullRequest, PULL_TIME_DELAY_MILLS_WHEN_FLOW_CONTROL);
             if ((queueFlowControlTimes++ % 1000) == 0) {
@@ -242,6 +240,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             return;
         }
 
+        //非有序消费的话
         if (!this.consumeOrderly) {
             if (processQueue.getMaxSpan() > this.defaultMQPushConsumer.getConsumeConcurrentlyMaxSpan()) {
                 this.executePullRequestLater(pullRequest, PULL_TIME_DELAY_MILLS_WHEN_FLOW_CONTROL);
@@ -254,6 +253,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 return;
             }
         } else {
+            //如果是有序消费的话 那么需要进行加锁操作
             if (processQueue.isLocked()) {
                 if (!pullRequest.isLockedFirst()) {
                     final long offset = this.rebalanceImpl.computePullFromWhere(pullRequest.getMessageQueue());
@@ -275,6 +275,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             }
         }
 
+        //订阅的信息
         final SubscriptionData subscriptionData = this.rebalanceImpl.getSubscriptionInner().get(pullRequest.getMessageQueue().getTopic());
         if (null == subscriptionData) {
             this.executePullRequestLater(pullRequest, PULL_TIME_DELAY_MILLS_WHEN_EXCEPTION);
@@ -301,6 +302,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
                             long firstMsgOffset = Long.MAX_VALUE;
                             if (pullResult.getMsgFoundList() == null || pullResult.getMsgFoundList().isEmpty()) {
+                                //没有数据的话 直接执行下一次？ 这里会不会发生空轮询
                                 DefaultMQPushConsumerImpl.this.executePullRequestImmediately(pullRequest);
                             } else {
                                 firstMsgOffset = pullResult.getMsgFoundList().get(0).getQueueOffset();
@@ -308,13 +310,16 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                                 DefaultMQPushConsumerImpl.this.getConsumerStatsManager().incPullTPS(pullRequest.getConsumerGroup(),
                                     pullRequest.getMessageQueue().getTopic(), pullResult.getMsgFoundList().size());
 
+                                //将消息都放入到了processQueue队列中
                                 boolean dispatchToConsume = processQueue.putMessage(pullResult.getMsgFoundList());
+                                //这里回调客户端传入的MessageListener
                                 DefaultMQPushConsumerImpl.this.consumeMessageService.submitConsumeRequest(
                                     pullResult.getMsgFoundList(),
                                     processQueue,
                                     pullRequest.getMessageQueue(),
                                     dispatchToConsume);
 
+                                //继续消费
                                 if (DefaultMQPushConsumerImpl.this.defaultMQPushConsumer.getPullInterval() > 0) {
                                     DefaultMQPushConsumerImpl.this.executePullRequestLater(pullRequest,
                                         DefaultMQPushConsumerImpl.this.defaultMQPushConsumer.getPullInterval());
@@ -494,6 +499,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         log.info("resume this consumer, {}", this.defaultMQPushConsumer.getConsumerGroup());
     }
 
+    //对于发送失败的消息 可以标记 后面会进行重试
     public void sendMessageBack(MessageExt msg, int delayLevel, final String brokerName)
         throws RemotingException, MQBrokerException, InterruptedException, MQClientException {
         try {
@@ -558,6 +564,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
                 this.checkConfig();
 
+                //将配置到consumer的订阅信息拷贝到rebalance中
                 this.copySubscription();
 
                 if (this.defaultMQPushConsumer.getMessageModel() == MessageModel.CLUSTERING) {
@@ -581,23 +588,29 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 } else {
                     switch (this.defaultMQPushConsumer.getMessageModel()) {
                         case BROADCASTING:
+                            //对于广播的模式来说 每一个消费者都是消费权量的消息
                             this.offsetStore = new LocalFileOffsetStore(this.mQClientFactory, this.defaultMQPushConsumer.getConsumerGroup());
                             break;
                         case CLUSTERING:
+                            //对于集群方式来说 同一个组随机的消费消息 所以需要保证同一个组的消费者不能够重复消费消息
                             this.offsetStore = new RemoteBrokerOffsetStore(this.mQClientFactory, this.defaultMQPushConsumer.getConsumerGroup());
                             break;
                         default:
                             break;
                     }
+
                     this.defaultMQPushConsumer.setOffsetStore(this.offsetStore);
                 }
+                //对offset记录进行加载
                 this.offsetStore.load();
 
                 if (this.getMessageListenerInner() instanceof MessageListenerOrderly) {
+                    //如果是有序消息
                     this.consumeOrderly = true;
                     this.consumeMessageService =
                         new ConsumeMessageOrderlyService(this, (MessageListenerOrderly) this.getMessageListenerInner());
                 } else if (this.getMessageListenerInner() instanceof MessageListenerConcurrently) {
+                    //并发消息
                     this.consumeOrderly = false;
                     this.consumeMessageService =
                         new ConsumeMessageConcurrentlyService(this, (MessageListenerConcurrently) this.getMessageListenerInner());
@@ -861,6 +874,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         try {
             SubscriptionData subscriptionData = FilterAPI.buildSubscriptionData(this.defaultMQPushConsumer.getConsumerGroup(),
                 topic, subExpression);
+            //将订阅信息存储
             this.rebalanceImpl.getSubscriptionInner().put(topic, subscriptionData);
             if (this.mQClientFactory != null) {
                 this.mQClientFactory.sendHeartbeatToAllBrokerWithLock();
@@ -991,6 +1005,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
     @Override
     public void doRebalance() {
         if (!this.pause) {
+            //执行负载操作
             this.rebalanceImpl.doRebalance(this.isConsumeOrderly());
         }
     }

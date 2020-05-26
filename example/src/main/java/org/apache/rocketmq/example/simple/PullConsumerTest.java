@@ -21,7 +21,7 @@ import org.apache.rocketmq.client.consumer.PullResult;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.message.MessageQueue;
 
-public class PullConsumerTest {
+public class    PullConsumerTest {
     public static void main(String[] args) throws MQClientException {
         DefaultMQPullConsumer consumer = new DefaultMQPullConsumer("please_rename_unique_group_name_5");
         consumer.setNamesrvAddr("127.0.0.1:9876");

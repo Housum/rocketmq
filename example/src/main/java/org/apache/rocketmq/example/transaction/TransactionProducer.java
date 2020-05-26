@@ -30,10 +30,16 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 事务消息的例子
+ * @link https://rocketmq.apache.org/docs/transaction-example/
+ */
 public class TransactionProducer {
     public static void main(String[] args) throws MQClientException, InterruptedException {
         TransactionListener transactionListener = new TransactionListenerImpl();
         TransactionMQProducer producer = new TransactionMQProducer("please_rename_unique_group_name");
+
+        //检查事务状态的线程池
         ExecutorService executorService = new ThreadPoolExecutor(2, 5, 100, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(2000), new ThreadFactory() {
             @Override
             public Thread newThread(Runnable r) {
@@ -44,6 +50,7 @@ public class TransactionProducer {
         });
 
         producer.setExecutorService(executorService);
+        //必须实现事务监听 在其中完成事务的操作
         producer.setTransactionListener(transactionListener);
         producer.start();
 
@@ -53,6 +60,7 @@ public class TransactionProducer {
                 Message msg =
                     new Message("TopicTest1234", tags[i % tags.length], "KEY" + i,
                         ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET));
+                //在发完之后会到transactionListener中执行逻辑
                 SendResult sendResult = producer.sendMessageInTransaction(msg, null);
                 System.out.printf("%s%n", sendResult);
 

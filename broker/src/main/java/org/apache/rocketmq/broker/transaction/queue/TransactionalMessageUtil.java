@@ -20,6 +20,9 @@ import org.apache.rocketmq.common.MixAll;
 
 import java.nio.charset.Charset;
 
+/**
+ * 事务消息帮助类
+ */
 public class TransactionalMessageUtil {
     public static final String REMOVETAG = "d";
     public static Charset charset = Charset.forName("utf-8");

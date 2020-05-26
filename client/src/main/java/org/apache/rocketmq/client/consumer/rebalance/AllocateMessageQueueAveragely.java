@@ -25,13 +25,16 @@ import org.apache.rocketmq.common.message.MessageQueue;
 
 /**
  * Average Hashing queue algorithm
+ *
+ *
+ *
+ * @link https://github.com/Housum/rocketmq/blob/master/docs/cn/design.md
  */
 public class AllocateMessageQueueAveragely implements AllocateMessageQueueStrategy {
     private final InternalLogger log = ClientLogger.getLog();
 
     @Override
-    public List<MessageQueue> allocate(String consumerGroup, String currentCID, List<MessageQueue> mqAll,
-        List<String> cidAll) {
+    public List<MessageQueue> allocate(String consumerGroup, String currentCID, List<MessageQueue> mqAll, List<String> cidAll) {
         if (currentCID == null || currentCID.length() < 1) {
             throw new IllegalArgumentException("currentCID is empty");
         }

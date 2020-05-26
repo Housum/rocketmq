@@ -28,6 +28,10 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.common.protocol.body.KVTable;
 import org.apache.rocketmq.namesrv.NamesrvController;
+
+/**
+ * k-v的储存 采用的是hashmap实现
+ */
 public class KVConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
 
@@ -64,7 +68,7 @@ public class KVConfigManager {
             try {
                 HashMap<String, String> kvTable = this.configTable.get(namespace);
                 if (null == kvTable) {
-                    kvTable = new HashMap<String, String>();
+                    kvTable = new HashMap<>();
                     this.configTable.put(namespace, kvTable);
                     log.info("putKVConfig create new Namespace {}", namespace);
                 }
@@ -96,6 +100,7 @@ public class KVConfigManager {
 
                 String content = kvConfigSerializeWrapper.toJson();
 
+                //将配置文件都持久化到磁盘中
                 if (null != content) {
                     MixAll.string2File(content, this.namesrvController.getNamesrvConfig().getKvConfigPath());
                 }
@@ -177,8 +182,7 @@ public class KVConfigManager {
 
                 {
                     log.info("configTable SIZE: {}", this.configTable.size());
-                    Iterator<Entry<String, HashMap<String, String>>> it =
-                        this.configTable.entrySet().iterator();
+                    Iterator<Entry<String, HashMap<String, String>>> it = this.configTable.entrySet().iterator();
                     while (it.hasNext()) {
                         Entry<String, HashMap<String, String>> next = it.next();
                         Iterator<Entry<String, String>> itSub = next.getValue().entrySet().iterator();

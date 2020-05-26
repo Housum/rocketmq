@@ -24,13 +24,28 @@ import org.apache.rocketmq.remoting.CommandCustomHeader;
 import org.apache.rocketmq.remoting.annotation.CFNotNull;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 
+/**
+ * pull请求的返回值
+ */
 public class PullMessageResponseHeader implements CommandCustomHeader {
+    /**
+     * 建议的哪个brokerId
+     */
     @CFNotNull
     private Long suggestWhichBrokerId;
+    /**
+     * 消费获取的offset
+     */
     @CFNotNull
     private Long nextBeginOffset;
+    /**
+     * 消息的最小offset
+     */
     @CFNotNull
     private Long minOffset;
+    /**
+     * 消息最大的offset
+     */
     @CFNotNull
     private Long maxOffset;
 

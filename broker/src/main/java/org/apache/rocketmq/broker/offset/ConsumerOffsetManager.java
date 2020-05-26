@@ -33,12 +33,31 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.protocol.RemotingSerializable;
 
+/**
+ *
+ *  consumer 的消费位置,这个位置指的是conusmeQueue的位置,该位置是一个逻辑位置
+ *  储存着消息在commitLog中的索引
+ * {
+ * 	"offsetTable":{
+ * 		"TopicTest@please_rename_unique_group_name_4":{0:250,1:250,2:250,3:250
+ *                },
+ * 		"TopicTest@please_rename_unique_group_name_3":{0:250,1:250,2:250,3:250
+ *        },
+ * 		"%RETRY%please_rename_unique_group_name_4@please_rename_unique_group_name_4":{0:0
+ *        },
+ * 		"%RETRY%please_rename_unique_group_name_3@please_rename_unique_group_name_3":{0:0
+ *        }* 	}
+ * }
+ *
+ */
 public class ConsumerOffsetManager extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
+    //topic和组之间的分割
     private static final String TOPIC_GROUP_SEPARATOR = "@";
 
-    private ConcurrentMap<String/* topic@group */, ConcurrentMap<Integer, Long>> offsetTable =
-        new ConcurrentHashMap<String, ConcurrentMap<Integer, Long>>(512);
+    //键:消费topic的组 值 每一个consumeQueue的位置
+    //* topic@group - {messageQueueId0-offset,messageQueueId1-offset,messageQueueIdN-offset}
+    private ConcurrentMap<String/* topic@group */, ConcurrentMap<Integer, Long>> offsetTable = new ConcurrentHashMap<String, ConcurrentMap<Integer, Long>>(512);
 
     private transient BrokerController brokerController;
 
@@ -49,6 +68,9 @@ public class ConsumerOffsetManager extends ConfigManager {
         this.brokerController = brokerController;
     }
 
+    /**
+     * 检查没有被订阅的topic 将其移除
+     */
     public void scanUnsubscribedTopic() {
         Iterator<Entry<String, ConcurrentMap<Integer, Long>>> it = this.offsetTable.entrySet().iterator();
         while (it.hasNext()) {
@@ -59,8 +81,7 @@ public class ConsumerOffsetManager extends ConfigManager {
                 String topic = arrays[0];
                 String group = arrays[1];
 
-                if (null == brokerController.getConsumerManager().findSubscriptionData(group, topic)
-                    && this.offsetBehindMuchThanData(topic, next.getValue())) {
+                if (null == brokerController.getConsumerManager().findSubscriptionData(group, topic) && this.offsetBehindMuchThanData(topic, next.getValue())) {
                     it.remove();
                     log.warn("remove topic offset, {}", topicAtGroup);
                 }
@@ -76,12 +97,17 @@ public class ConsumerOffsetManager extends ConfigManager {
             Entry<Integer, Long> next = it.next();
             long minOffsetInStore = this.brokerController.getMessageStore().getMinOffsetInQueue(topic, next.getKey());
             long offsetInPersist = next.getValue();
+            //如果当前offset已经小于实际消息的offset了 那么说明被清理到了
             result = offsetInPersist <= minOffsetInStore;
         }
 
         return result;
     }
 
+    /**
+     *
+     * 获取给定组的topic集合
+     */
     public Set<String> whichTopicByConsumer(final String group) {
         Set<String> topics = new HashSet<String>();
 
@@ -100,6 +126,9 @@ public class ConsumerOffsetManager extends ConfigManager {
         return topics;
     }
 
+    /**
+     * 获取topic有哪些组
+     */
     public Set<String> whichGroupByTopic(final String topic) {
         Set<String> groups = new HashSet<String>();
 
@@ -118,8 +147,10 @@ public class ConsumerOffsetManager extends ConfigManager {
         return groups;
     }
 
-    public void commitOffset(final String clientHost, final String group, final String topic, final int queueId,
-        final long offset) {
+    /**
+     * 设置指定MessageQueueId对于的topic+group的消费offset
+     */
+    public void commitOffset(final String clientHost, final String group, final String topic, final int queueId, final long offset) {
         // topic@group
         String key = topic + TOPIC_GROUP_SEPARATOR + group;
         this.commitOffset(clientHost, key, queueId, offset);
@@ -128,7 +159,7 @@ public class ConsumerOffsetManager extends ConfigManager {
     private void commitOffset(final String clientHost, final String key, final int queueId, final long offset) {
         ConcurrentMap<Integer, Long> map = this.offsetTable.get(key);
         if (null == map) {
-            map = new ConcurrentHashMap<Integer, Long>(32);
+            map = new ConcurrentHashMap<>(32);
             map.put(queueId, offset);
             this.offsetTable.put(key, map);
         } else {
@@ -139,6 +170,9 @@ public class ConsumerOffsetManager extends ConfigManager {
         }
     }
 
+    /**
+     * 查询指定topic+group指定queueId的offset
+     */
     public long queryOffset(final String group, final String topic, final int queueId) {
         // topic@group
         String key = topic + TOPIC_GROUP_SEPARATOR + group;
@@ -183,6 +217,12 @@ public class ConsumerOffsetManager extends ConfigManager {
         this.offsetTable = offsetTable;
     }
 
+    /**
+     * 查询topic指定group的每个MessageQueue的最小的offset
+     * @param topic
+     * @param filterGroups
+     * @return
+     */
     public Map<Integer, Long> queryMinOffsetInAllGroup(final String topic, final String filterGroups) {
 
         Map<Integer, Long> queueMinOffset = new HashMap<Integer, Long>();

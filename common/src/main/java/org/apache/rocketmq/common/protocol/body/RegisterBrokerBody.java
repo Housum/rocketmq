@@ -109,12 +109,14 @@ public class RegisterBrokerBody extends RemotingSerializable {
         registerBrokerBody.getTopicConfigSerializeWrapper().setDataVersion(dataVersion);
         ConcurrentMap<String, TopicConfig> topicConfigTable = registerBrokerBody.getTopicConfigSerializeWrapper().getTopicConfigTable();
 
+        //broker中topic的信息的个数
         int topicConfigNumber = readInt(inflaterInputStream);
         LOGGER.debug("{} topic configs to extract", topicConfigNumber);
 
         for (int i = 0; i < topicConfigNumber; i++) {
+            //获取topic的信息
             int topicConfigJsonLength = readInt(inflaterInputStream);
-
+            //解码出topic的信息
             byte[] buffer = readBytes(inflaterInputStream, topicConfigJsonLength);
             TopicConfig topicConfig = new TopicConfig();
             String topicConfigJson = new String(buffer, MixAll.DEFAULT_CHARSET);
@@ -122,6 +124,7 @@ public class RegisterBrokerBody extends RemotingSerializable {
             topicConfigTable.put(topicConfig.getTopicName(), topicConfig);
         }
 
+        //topic过滤
         int filterServerListJsonLength = readInt(inflaterInputStream);
 
         byte[] filterServerListBuffer = readBytes(inflaterInputStream, filterServerListJsonLength);

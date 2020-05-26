@@ -16,7 +16,14 @@
  */
 package org.apache.rocketmq.broker.mqtrace;
 
+import org.apache.rocketmq.broker.processor.PullMessageProcessor;
+
+/**
+ * consumer消费消息的hook
+ * @see PullMessageProcessor#processRequest(io.netty.channel.Channel, org.apache.rocketmq.remoting.protocol.RemotingCommand, boolean)
+ */
 public interface ConsumeMessageHook {
+
     String hookName();
 
     void consumeMessageBefore(final ConsumeMessageContext context);

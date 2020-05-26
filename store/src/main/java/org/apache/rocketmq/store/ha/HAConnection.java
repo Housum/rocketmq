@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+
 import org.apache.rocketmq.common.ServiceThread;
 import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
@@ -28,6 +29,29 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 
+/**
+ * HAConnection.ReadSocketService服务线程
+ *
+ * 该模块主要是读取备用Broker的心跳信息，该信息就是8个字节，值为备用Broker的最大物理偏移量，在解析到该值之后，首先，将该值赋值给HAConnection.slaveAckOffset变量；
+ * 然后若HAConnection.slaveRequestOffset小于零(在第一次启动时赋值为-1)则赋值给该变量；最后调用HAService.notifyTransferSome(long slaveAckOffset)方法，
+ * 在该方法中，若slaveAckOffset大于HAService.push2SlaveMaxOffset的值则更新push2SlaveMaxOffset的值，
+ * 并通知调用GroupTransferService.notifyTransferSome方法唤醒GroupTransferService服务线程。在同步双写模式下面，前端调用者会通过此线程服务来监听同步进度情况。
+ *
+ * HAConnection.WriteSocketService服务线程
+ * 该服务线程启动之后，就每隔5秒向备用Broker发送心跳信息，具体步骤如下：
+ * 1）检查HAConnection.slaveRequestOffset是否等于-1，即刚启动的状态，还没有收到备用Broker端的最大偏移量值；则等待1秒钟之后再次监听slaveRequestOffset变量；若收到了备用Broker的最大偏移量，即不等于-1了。则执行如下步骤；
+ * 2）检查WriteSocketService.nextTransferFromWhere是否等于-1，即刚启动的状态，若是则要计算从哪里开始读取数据进行同步，大致逻辑如下：
+ * 2.1）若HAConnection.slaveRequestOffset不等于零，则将slaveRequestOffset赋值给nextTransferFromWhere变量，表示就以备用Broker传来的最大偏离量开始读取数据进行同步；
+ * 2.2）若HAConnection.slaveRequestOffset等于零，表示备用Broker端还没有commitlog数据，则将最后一个文件同步到备用Broker，即nextTransferFromWhere=最大偏移量maxOffset-maxOffset%1G，得到的值为最后一个文件的开始偏移量；
+ * 3）向备用Broker发送心跳消息，消息为12个字节，前8个字节为开始同步的偏移量offset，后4个字节填0；若发送成功则继续下面的逻辑，否则从第1步开始重新执行；
+ * 4）以nextTransferFromWhere为开始读取偏移量从commitlog中读取数据，调用DefaultMessageStore对象的getCommitLogData方法；若没有获取到数据则该服务线程等待100毫秒之后重新从第1步开始执行；
+ * 5）若获取到commitlog数据，再检查该数据的大小是否大于了32K，每次数据同步最多只能同步32K，若大于了32K，则只发送前32K数据；消息机构为：
+ * 12个字节的消息头，其中，前8个字节为开始同步的偏移量offset，后4个字节为同步数据的大小；先发送消息头，发送完成之后再发送同步数据；
+ * 6）一直重复执行1-5步，若出现异常跳出来循环后，则停止该服务，并且从HAService.connectionList变量中删除该客户端连接；然后关掉Socket链接，释放资源。
+ *
+ *
+ * 该对象是针对每一个salve连接的都创建一个HAConnection
+ */
 public class HAConnection {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private final HAService haService;
@@ -78,6 +102,11 @@ public class HAConnection {
         return socketChannel;
     }
 
+    /**
+     * 主要的工作就两个 第一个就是监控心跳
+     * 第二就是salve初始化的时候 会将上一次消息同步到的位置
+     * 发送过来
+     */
     class ReadSocketService extends ServiceThread {
         private static final int READ_MAX_BUFFER_SIZE = 1024 * 1024;
         private final Selector selector;
@@ -105,7 +134,7 @@ public class HAConnection {
                         HAConnection.log.error("processReadEvent error");
                         break;
                     }
-
+                    //超过新心跳时间
                     long interval = HAConnection.this.haService.getDefaultMessageStore().getSystemClock().now() - this.lastReadTimestamp;
                     if (interval > HAConnection.this.haService.getDefaultMessageStore().getMessageStoreConfig().getHaHousekeepingInterval()) {
                         log.warn("ha housekeeping, found this connection[" + HAConnection.this.clientAddr + "] expired, " + interval);
@@ -159,13 +188,26 @@ public class HAConnection {
                     if (readSize > 0) {
                         readSizeZeroTimes = 0;
                         this.lastReadTimestamp = HAConnection.this.haService.getDefaultMessageStore().getSystemClock().now();
+
+                        //每次心条是都是8个字节 为当前消息的offset 如果大于8的话 那么说明消息至少已经完整了
                         if ((this.byteBufferRead.position() - this.processPostion) >= 8) {
+
+                            //粘包处理
+                            //可能会有多个消息同时过来  比如刚好是8字节倍数情况 那么获取后面的8字节就可以了
+                            //比如16个字节 那么pos = 16-0 = 16,pos - 8 = 8,获取从第8个字节开始获取了
+                            //假设少于16个字节 那么还是获取的签前面的8个字节 比如TCP发送过来是15个字节
+                            //那么pos = 15 - 15%8 = 8,pos - 8 = 0获取获得是还是前8个字节
+                            //假设大于16个字节 但是不是8字节倍数的话 那么获取获取的是8个字节为以单位的最后一个单位数据
+                            //比如17个字节 那么获取的是8-16字节
+
                             int pos = this.byteBufferRead.position() - (this.byteBufferRead.position() % 8);
                             long readOffset = this.byteBufferRead.getLong(pos - 8);
                             this.processPostion = pos;
 
+                            //记录salve同步的offset 这个位置在
                             HAConnection.this.slaveAckOffset = readOffset;
                             if (HAConnection.this.slaveRequestOffset < 0) {
+                                //记录下salve同步过来的初始化offset 该值会在WriteSocketService中被使用 master同步消息到salve就是从这个位置开始的
                                 HAConnection.this.slaveRequestOffset = readOffset;
                                 log.info("slave[" + HAConnection.this.clientAddr + "] request offset " + readOffset);
                             }
@@ -190,14 +232,19 @@ public class HAConnection {
         }
     }
 
+    /**
+     * master 向salve同步消息
+     */
     class WriteSocketService extends ServiceThread {
         private final Selector selector;
         private final SocketChannel socketChannel;
 
         private final int headerSize = 8 + 4;
         private final ByteBuffer byteBufferHeader = ByteBuffer.allocate(headerSize);
+        //从下一次开始同步信息的位置
         private long nextTransferFromWhere = -1;
         private SelectMappedBufferResult selectMappedBufferResult;
+        //为了防止TCP拆包 所以需要记录上一次的消息是否已经完全的发送了
         private boolean lastWriteOver = true;
         private long lastWriteTimestamp = System.currentTimeMillis();
 
@@ -216,18 +263,24 @@ public class HAConnection {
                 try {
                     this.selector.select(1000);
 
+                    //如果还没有同步心跳的话 那么等待一段时间
                     if (-1 == HAConnection.this.slaveRequestOffset) {
                         Thread.sleep(10);
                         continue;
                     }
 
+                    //开始同步的位置
                     if (-1 == this.nextTransferFromWhere) {
+                        //如果salve是新加入的话 那么将会从0开始同步消息
                         if (0 == HAConnection.this.slaveRequestOffset) {
                             long masterOffset = HAConnection.this.haService.getDefaultMessageStore().getCommitLog().getMaxOffset();
+                            //计算该从哪个位置开始同步消息
+
+                            //当前最大的位置 - 当前位置相对于文件的大小的偏移量 即从内容的开始位置同步
                             masterOffset =
-                                masterOffset
-                                    - (masterOffset % HAConnection.this.haService.getDefaultMessageStore().getMessageStoreConfig()
-                                    .getMapedFileSizeCommitLog());
+                                    masterOffset
+                                            - (masterOffset % HAConnection.this.haService.getDefaultMessageStore().getMessageStoreConfig()
+                                            .getMapedFileSizeCommitLog());
 
                             if (masterOffset < 0) {
                                 masterOffset = 0;
@@ -235,46 +288,51 @@ public class HAConnection {
 
                             this.nextTransferFromWhere = masterOffset;
                         } else {
+                            //如果salve之前已经同步过部分的数据的话 那么就从salve当前最大的位置开始同步数据
                             this.nextTransferFromWhere = HAConnection.this.slaveRequestOffset;
                         }
 
                         log.info("master transfer data from " + this.nextTransferFromWhere + " to slave[" + HAConnection.this.clientAddr
-                            + "], and slave request " + HAConnection.this.slaveRequestOffset);
+                                + "], and slave request " + HAConnection.this.slaveRequestOffset);
                     }
 
+                    //记录上一次的消息是否发送完成了
                     if (this.lastWriteOver) {
 
                         long interval =
-                            HAConnection.this.haService.getDefaultMessageStore().getSystemClock().now() - this.lastWriteTimestamp;
+                                HAConnection.this.haService.getDefaultMessageStore().getSystemClock().now() - this.lastWriteTimestamp;
 
+                        //每5秒钟同步一次消息到salve
                         if (interval > HAConnection.this.haService.getDefaultMessageStore().getMessageStoreConfig()
-                            .getHaSendHeartbeatInterval()) {
-
-                            // Build Header
+                                .getHaSendHeartbeatInterval()) {
+                            // Build Header 第一次的头信息中并没有bodySize为0 只是传输了一个offset 这个offset
+                            //是开始的位置nextTransferFromWhere
                             this.byteBufferHeader.position(0);
                             this.byteBufferHeader.limit(headerSize);
                             this.byteBufferHeader.putLong(this.nextTransferFromWhere);
                             this.byteBufferHeader.putInt(0);
                             this.byteBufferHeader.flip();
-
+                            //同步消息
                             this.lastWriteOver = this.transferData();
                             if (!this.lastWriteOver)
                                 continue;
                         }
                     } else {
+                        //如果没有发送完成 那么继续发送
                         this.lastWriteOver = this.transferData();
                         if (!this.lastWriteOver)
                             continue;
                     }
 
-                    SelectMappedBufferResult selectResult =
-                        HAConnection.this.haService.getDefaultMessageStore().getCommitLogData(this.nextTransferFromWhere);
+                    //获取消息体
+                    SelectMappedBufferResult selectResult = HAConnection.this.haService.getDefaultMessageStore().getCommitLogData(this.nextTransferFromWhere);
                     if (selectResult != null) {
+                        //最大32K
                         int size = selectResult.getSize();
                         if (size > HAConnection.this.haService.getDefaultMessageStore().getMessageStoreConfig().getHaTransferBatchSize()) {
                             size = HAConnection.this.haService.getDefaultMessageStore().getMessageStoreConfig().getHaTransferBatchSize();
                         }
-
+                        //计算下次开始同步的offset
                         long thisOffset = this.nextTransferFromWhere;
                         this.nextTransferFromWhere += size;
 
@@ -300,6 +358,7 @@ public class HAConnection {
                 }
             }
 
+            //异常退出的时候 情况相关资源
             HAConnection.this.haService.getWaitNotifyObject().removeFromWaitingThreadTable();
 
             if (this.selectMappedBufferResult != null) {
@@ -328,12 +387,15 @@ public class HAConnection {
         }
 
         private boolean transferData() throws Exception {
+
+            //写数据的时候 重试三次
             int writeSizeZeroTimes = 0;
             // Write Header
             while (this.byteBufferHeader.hasRemaining()) {
                 int writeSize = this.socketChannel.write(this.byteBufferHeader);
                 if (writeSize > 0) {
                     writeSizeZeroTimes = 0;
+                    //更新时间
                     this.lastWriteTimestamp = HAConnection.this.haService.getDefaultMessageStore().getSystemClock().now();
                 } else if (writeSize == 0) {
                     if (++writeSizeZeroTimes >= 3) {
@@ -344,12 +406,14 @@ public class HAConnection {
                 }
             }
 
+            //消息体 第一次为null
             if (null == this.selectMappedBufferResult) {
+                //为了防止TCP拆包 所以需要记录上一次的消息是否已经完全的发送了
                 return !this.byteBufferHeader.hasRemaining();
             }
 
             writeSizeZeroTimes = 0;
-
+            //将body进行发送
             // Write Body
             if (!this.byteBufferHeader.hasRemaining()) {
                 while (this.selectMappedBufferResult.getByteBuffer().hasRemaining()) {
@@ -367,8 +431,10 @@ public class HAConnection {
                 }
             }
 
+            //检查是否已经发送完成了
             boolean result = !this.byteBufferHeader.hasRemaining() && !this.selectMappedBufferResult.getByteBuffer().hasRemaining();
 
+            //如果不存在话 将buffer进行回收
             if (!this.selectMappedBufferResult.getByteBuffer().hasRemaining()) {
                 this.selectMappedBufferResult.release();
                 this.selectMappedBufferResult = null;

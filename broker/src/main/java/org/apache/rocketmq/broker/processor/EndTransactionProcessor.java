@@ -52,10 +52,23 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
     @Override
     public RemotingCommand processRequest(ChannelHandlerContext ctx, RemotingCommand request) throws
         RemotingCommandException {
+
+        //对于事务消息返回提交的话,那么将half消息移动到真实的topic下,删除half的消息
+        //对于回滚的事务 直接将half直接删除
+        //返回状态未知的情况下 不做任何的处理
+
+        //对于第三种情况,在org.apache.rocketmq.broker.transaction.TransactionalMessageCheckService.onWaitEnd中就进行补偿
+        //对于第一种,第二种在处理失败的话 那么half消息也没有变化,也会执行org.apache.rocketmq.broker.transaction.TransactionalMessageCheckService.onWaitEnd
+        //进行补偿
+
+        //对于已经明确了状态的事务,为了标记其是明确状态的,会向RMQ_SYS_TRANS_OP_HALF_TOPIC这个topic插入一条消息,其中记录了half消息在consumeQueue中的位置
+
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
         final EndTransactionRequestHeader requestHeader =
             (EndTransactionRequestHeader)request.decodeCommandCustomHeader(EndTransactionRequestHeader.class);
         LOGGER.info("Transaction request:{}", requestHeader);
+
+        //事务消息只能由master执行
         if (BrokerRole.SLAVE == brokerController.getMessageStoreConfig().getBrokerRole()) {
             response.setCode(ResponseCode.SLAVE_NOT_AVAILABLE);
             LOGGER.warn("Message store is slave mode, so end transaction is forbidden. ");
@@ -121,19 +134,24 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
                     return null;
             }
         }
+
         OperationResult result = new OperationResult();
         if (MessageSysFlag.TRANSACTION_COMMIT_TYPE == requestHeader.getCommitOrRollback()) {
+            //返回half的消息
             result = this.brokerController.getTransactionalMessageService().commitMessage(requestHeader);
             if (result.getResponseCode() == ResponseCode.SUCCESS) {
                 RemotingCommand res = checkPrepareMessage(result.getPrepareMessage(), requestHeader);
                 if (res.getCode() == ResponseCode.SUCCESS) {
+                    //构建原始消息
                     MessageExtBrokerInner msgInner = endMessageTransaction(result.getPrepareMessage());
                     msgInner.setSysFlag(MessageSysFlag.resetTransactionValue(msgInner.getSysFlag(), requestHeader.getCommitOrRollback()));
                     msgInner.setQueueOffset(requestHeader.getTranStateTableOffset());
                     msgInner.setPreparedTransactionOffset(requestHeader.getCommitLogOffset());
                     msgInner.setStoreTimestamp(result.getPrepareMessage().getStoreTimestamp());
+                    //最终发送事务消息 如果发送消息成功的话 那么才能够删除原始的交易
                     RemotingCommand sendResult = sendFinalMessage(msgInner);
                     if (sendResult.getCode() == ResponseCode.SUCCESS) {
+                        //删除第一阶段事务消息
                         this.brokerController.getTransactionalMessageService().deletePrepareMessage(result.getPrepareMessage());
                     }
                     return sendResult;
@@ -163,6 +181,7 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
     private RemotingCommand checkPrepareMessage(MessageExt msgExt, EndTransactionRequestHeader requestHeader) {
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
         if (msgExt != null) {
+            //两个阶段的消息不是同一个group发送的
             final String pgroupRead = msgExt.getProperty(MessageConst.PROPERTY_PRODUCER_GROUP);
             if (!pgroupRead.equals(requestHeader.getProducerGroup())) {
                 response.setCode(ResponseCode.SYSTEM_ERROR);

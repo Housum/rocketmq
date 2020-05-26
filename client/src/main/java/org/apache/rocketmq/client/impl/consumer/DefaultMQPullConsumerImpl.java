@@ -208,8 +208,8 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
     private PullResult pullSyncImpl(MessageQueue mq, SubscriptionData subscriptionData, long offset, int maxNums, boolean block,
         long timeout)
         throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
-        this.makeSureStateOK();
 
+        this.makeSureStateOK();
         if (null == mq) {
             throw new MQClientException("mq is null", null);
         }
@@ -224,6 +224,8 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
 
         this.subscriptionAutomatically(mq.getTopic());
 
+        //如果是可堵塞的情况下的话 那么会等到有消息的时候 broker进行回调
+        //@see org.apache.rocketmq.store.MessageArrivingListener
         int sysFlag = PullSysFlag.buildSysFlag(false, block, true, false);
 
         long timeoutMillis = block ? this.defaultMQPullConsumer.getConsumerTimeoutMillisWhenSuspend() : timeout;

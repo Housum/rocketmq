@@ -30,6 +30,8 @@ import java.util.Iterator;
 
 /**
  * Calculate bit map of filter.
+ *
+ * 计算消息的位图 后面在过滤消息的时候需要使用到
  */
 public class CommitLogDispatcherCalcBitMap implements CommitLogDispatcher {
 

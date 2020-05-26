@@ -19,6 +19,9 @@ package org.apache.rocketmq.broker.longpolling;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 封装多个请求
+ */
 public class ManyPullRequest {
     private final ArrayList<PullRequest> pullRequestList = new ArrayList<>();
 
@@ -30,6 +33,9 @@ public class ManyPullRequest {
         this.pullRequestList.addAll(many);
     }
 
+    /**
+     * 将请求都拷贝,并且清理掉
+     */
     public synchronized List<PullRequest> cloneListAndClear() {
         if (!this.pullRequestList.isEmpty()) {
             List<PullRequest> result = (ArrayList<PullRequest>) this.pullRequestList.clone();

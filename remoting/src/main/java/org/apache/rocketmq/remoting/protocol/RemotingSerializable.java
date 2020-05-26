@@ -19,6 +19,9 @@ package org.apache.rocketmq.remoting.protocol;
 import com.alibaba.fastjson.JSON;
 import java.nio.charset.Charset;
 
+/**
+ * 远程对象都需要继承该类
+ */
 public abstract class RemotingSerializable {
     private final static Charset CHARSET_UTF8 = Charset.forName("UTF-8");
 

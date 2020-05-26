@@ -21,10 +21,17 @@ import org.apache.rocketmq.common.protocol.header.EndTransactionRequestHeader;
 import org.apache.rocketmq.store.MessageExtBrokerInner;
 import org.apache.rocketmq.store.PutMessageResult;
 
+/**
+ * 事务消息处理类 使用的是2PC+反查补偿的方式(状态不确定的)
+ *
+ * @link https://github.com/Housum/rocketmq/blob/master/docs/cn/design.md
+ */
 public interface TransactionalMessageService {
 
     /**
      * Process prepare message, in common, we should put this message to storage service.
+     * 事务第一阶段,该阶段的时候消息并没有设置指定的topic,而是放在了org.apache.rocketmq.common.MixAll#RMQ_SYS_TRANS_HALF_TOPIC这个topic中
+     * 后面第二阶段之后才会将其放入到指定的topic中
      *
      * @param messageInner Prepare(Half) message.
      * @return Prepare message storage result.
@@ -34,6 +41,8 @@ public interface TransactionalMessageService {
     /**
      * Delete prepare message when this message has been committed or rolled back.
      *
+     * 事务已经执行完了(commit或者rollback)
+     *
      * @param messageExt
      */
     boolean deletePrepareMessage(MessageExt messageExt);
@@ -41,6 +50,7 @@ public interface TransactionalMessageService {
     /**
      * Invoked to process commit prepare message.
      *
+     * 提交事务消息
      * @param requestHeader Commit message request header.
      * @return Operate result contains prepare message and relative error code.
      */
@@ -48,6 +58,8 @@ public interface TransactionalMessageService {
 
     /**
      * Invoked to roll back prepare message.
+     *
+     * 回滚事务消息
      *
      * @param requestHeader Prepare message request header.
      * @return Operate result contains prepare message and relative error code.
@@ -57,24 +69,29 @@ public interface TransactionalMessageService {
     /**
      * Traverse uncommitted/unroll back half message and send check back request to producer to obtain transaction
      * status.
+     * <p>
+     * 对于状态未确定的消息,进行事务状态的检查
      *
-     * @param transactionTimeout The minimum time of the transactional message to be checked firstly, one message only
-     * exceed this time interval that can be checked.
+     * @param transactionTimeout  The minimum time of the transactional message to be checked firstly, one message only
+     *                            exceed this time interval that can be checked.
      * @param transactionCheckMax The maximum number of times the message was checked, if exceed this value, this
-     * message will be discarded.
-     * @param listener When the message is considered to be checked or discarded, the relative method of this class will
-     * be invoked.
+     *                            message will be discarded.
+     * @param listener            When the message is considered to be checked or discarded, the relative method of this class will
+     *                            be invoked.
      */
     void check(long transactionTimeout, int transactionCheckMax, AbstractTransactionalMessageCheckListener listener);
 
     /**
      * Open transaction service.
+     * <p>
+     * 打开服务
      *
      * @return If open success, return true.
      */
     boolean open();
 
     /**
+     * 关闭服务
      * Close transaction service.
      */
     void close();

@@ -53,8 +53,7 @@ public interface MQPullConsumer extends MQConsumer {
      * @param maxNums max pulling numbers
      * @return The resulting {@code PullRequest}
      */
-    PullResult pull(final MessageQueue mq, final String subExpression, final long offset,
-        final int maxNums) throws MQClientException, RemotingException, MQBrokerException,
+    PullResult pull(final MessageQueue mq, final String subExpression, final long offset, final int maxNums) throws MQClientException, RemotingException, MQBrokerException,
         InterruptedException;
 
     /**
@@ -62,8 +61,7 @@ public interface MQPullConsumer extends MQConsumer {
      *
      * @return The resulting {@code PullRequest}
      */
-    PullResult pull(final MessageQueue mq, final String subExpression, final long offset,
-        final int maxNums, final long timeout) throws MQClientException, RemotingException,
+    PullResult pull(final MessageQueue mq, final String subExpression, final long offset, final int maxNums, final long timeout) throws MQClientException, RemotingException,
         MQBrokerException, InterruptedException;
 
     /**
@@ -78,8 +76,7 @@ public interface MQPullConsumer extends MQConsumer {
      * @param maxNums max pulling numbers
      * @return The resulting {@code PullRequest}
      */
-    PullResult pull(final MessageQueue mq, final MessageSelector selector, final long offset,
-        final int maxNums) throws MQClientException, RemotingException, MQBrokerException,
+    PullResult pull(final MessageQueue mq, final MessageSelector selector, final long offset, final int maxNums) throws MQClientException, RemotingException, MQBrokerException,
         InterruptedException;
 
     /**

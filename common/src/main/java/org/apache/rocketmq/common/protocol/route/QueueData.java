@@ -20,11 +20,22 @@
  */
 package org.apache.rocketmq.common.protocol.route;
 
+/**
+ * broker 集群数据
+ *
+ * 标示的是一个broker子集群信息
+ */
 public class QueueData implements Comparable<QueueData> {
+    //broker集群的名字(Broker分为Master与Slave，一个Master可以对应多个Slave，但是一个Slave只能对应一个Master，
+    // Master与Slave 的对应关系通过指定相同的BrokerName，不同的BrokerId 来定义，BrokerId为0表示Master，非0表示Slave)
     private String brokerName;
+    //集群中可读节点的数目
     private int readQueueNums;
+    //集群中可写节点的数目
     private int writeQueueNums;
+    //permission 读写的权限 @see org.apache.rocketmq.common.constant.PermName
     private int perm;
+    //系统标示
     private int topicSynFlag;
 
     public int getReadQueueNums() {

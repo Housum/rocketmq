@@ -27,10 +27,17 @@ import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 public class SendMessageResponseHeader implements CommandCustomHeader {
     @CFNotNull
     private String msgId;
+    /**
+     *queueId
+     */
     @CFNotNull
     private Integer queueId;
+    /**
+     * 当前消费的offset
+     */
     @CFNotNull
     private Long queueOffset;
+    //事务ID
     private String transactionId;
 
     @Override

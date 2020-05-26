@@ -18,6 +18,14 @@ package org.apache.rocketmq.remoting;
 
 import org.apache.rocketmq.remoting.netty.ResponseFuture;
 
+/**
+ * 异步请求回调
+ */
 public interface InvokeCallback {
+    /**
+     * 异步回调方法
+     *
+     * @param responseFuture 返回
+     */
     void operationComplete(final ResponseFuture responseFuture);
 }

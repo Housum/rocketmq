@@ -32,6 +32,9 @@ import org.apache.rocketmq.store.QueryMessageResult;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 import org.apache.rocketmq.store.stats.BrokerStatsManager;
 
+/**
+ * 存储核心插件
+ */
 public abstract class AbstractPluginMessageStore implements MessageStore {
     protected MessageStore next = null;
     protected MessageStorePluginContext context;
